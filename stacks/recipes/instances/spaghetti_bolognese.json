@@ -1,0 +1,39 @@
+{
+  "id": "spaghetti_bolognese",
+  "class": "recipe",
+  "title": "Spaghetti Bolognese",
+  "servings": 4,
+  "prep_time_minutes": 20,
+  "cook_time_minutes": 60,
+  "difficulty": "medium",
+  "slug": "spaghetti-bolognese",
+  "tags": ["comfort", "crowd-pleaser", "family-style"],
+  "ingredients": [
+    "400g spaghetti",
+    "500g ground beef",
+    "1 onion, diced",
+    "2 cloves garlic, minced",
+    "1 carrot, diced",
+    "1 celery stalk, diced",
+    "400g canned crushed tomatoes",
+    "2 tbsp tomato paste",
+    "1 cup beef stock",
+    "1 tsp dried oregano",
+    "1 tsp dried basil",
+    "Salt and pepper to taste",
+    "Olive oil"
+  ],
+  "steps": [
+    "Heat olive oil in a large pot over medium heat. Sauté onion, carrot, celery until softened (5-7 minutes).",
+    "Add garlic and cook 1 minute until fragrant.",
+    "Add ground beef, breaking up until browned. Season with salt and pepper.",
+    "Stir in tomato paste, oregano, and basil. Cook 2 minutes.",
+    "Pour in crushed tomatoes and beef stock. Bring to a simmer, then reduce heat and cook 30-40 minutes, stirring occasionally.",
+    "Cook spaghetti according to package directions. Reserve 1/2 cup pasta water.",
+    "Toss spaghetti with sauce, loosening with pasta water if needed. Serve hot with Parmesan."
+  ],
+  "notes": "Better if simmered low and slow for 1+ hour.",
+  "build": [
+    { "recipes/recipe.html": "recipes/spaghetti-bolognese.html" }
+  ]
+}

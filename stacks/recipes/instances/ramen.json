@@ -1,0 +1,36 @@
+{
+  "id": "ramen",
+  "class": "recipe",
+  "title": "Weeknight Miso Ramen",
+  "servings": 2,
+  "prep_time_minutes": 10,
+  "cook_time_minutes": 20,
+  "difficulty": "easy",
+  "slug": "ramen",
+  "tags": ["noodles", "comfort", "quick"],
+  "ingredients": [
+    "2 packets fresh ramen noodles (or dried)",
+    "4 cups chicken or vegetable broth",
+    "3 tbsp white miso paste",
+    "1 tbsp soy sauce",
+    "1 tbsp mirin (optional)",
+    "2 cloves garlic, minced",
+    "1 tsp ginger, minced",
+    "1 cup mushrooms, sliced",
+    "2 soft-boiled eggs",
+    "1 cup baby spinach",
+    "2 green onions, sliced",
+    "Sesame oil and toasted sesame seeds"
+  ],
+  "steps": [
+    "In a pot, sauté garlic and ginger in a splash of oil for 1 minute. Add mushrooms and cook until softened.",
+    "Pour in broth, soy sauce, and mirin; bring to a simmer.",
+    "Whisk miso paste with a ladle of hot broth in a small bowl, then stir back into the pot (keep below a boil).",
+    "Cook noodles per package in the broth until just tender.",
+    "Add spinach to wilt. Ladle into bowls, top with soft-boiled egg halves, green onions, a drizzle of sesame oil, and sesame seeds."
+  ],
+  "notes": "Keep miso from boiling to preserve flavor.",
+  "build": [
+    { "recipes/recipe.html": "recipes/ramen.html" }
+  ]
+}

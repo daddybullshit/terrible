@@ -1,0 +1,33 @@
+{
+  "id": "pancakes",
+  "class": "recipe",
+  "title": "Fluffy Pancakes",
+  "servings": 4,
+  "prep_time_minutes": 10,
+  "cook_time_minutes": 15,
+  "difficulty": "easy",
+  "slug": "pancakes",
+  "tags": ["quick", "crowd-pleaser"],
+  "ingredients": [
+    "1 1/2 cups all-purpose flour",
+    "3 1/2 tsp baking powder",
+    "1 tbsp sugar",
+    "1 tsp salt",
+    "1 1/4 cups milk",
+    "1 egg",
+    "3 tbsp melted butter",
+    "1 tsp vanilla extract"
+  ],
+  "steps": [
+    "In a bowl, whisk flour, baking powder, sugar, and salt.",
+    "In another bowl, whisk milk, egg, melted butter, and vanilla.",
+    "Combine wet and dry ingredients until just mixed (batter should be slightly lumpy).",
+    "Heat a nonstick skillet over medium. Lightly butter. Pour 1/4 cup batter per pancake.",
+    "Cook until bubbles form and edges set, then flip and cook until golden.",
+    "Serve with maple syrup and butter."
+  ],
+  "notes": "Swap half the milk for buttermilk for extra tang.",
+  "build": [
+    { "recipes/recipe.html": "recipes/pancakes.html" }
+  ]
+}

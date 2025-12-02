@@ -1,0 +1,19 @@
+{
+  "name": "terrible",
+  "version": "1.0.0",
+  "description": "CLI wrappers and build tooling for rendering stack templates into hashed build directories.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "handlebars": "^4.7.8"
+  }
+}

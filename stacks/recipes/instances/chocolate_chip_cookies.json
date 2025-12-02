@@ -1,0 +1,35 @@
+{
+  "id": "chocolate_chip_cookies",
+  "class": "recipe",
+  "title": "Chewy Chocolate Chip Cookies",
+  "servings": 24,
+  "prep_time_minutes": 15,
+  "cook_time_minutes": 12,
+  "difficulty": "easy",
+  "slug": "chocolate-chip-cookies",
+  "tags": ["dessert", "crowd-pleaser"],
+  "ingredients": [
+    "2 1/4 cups all-purpose flour",
+    "1 tsp baking soda",
+    "1 tsp salt",
+    "1 cup unsalted butter, softened",
+    "3/4 cup brown sugar",
+    "3/4 cup granulated sugar",
+    "2 large eggs",
+    "2 tsp vanilla extract",
+    "2 cups chocolate chips"
+  ],
+  "steps": [
+    "Preheat oven to 375°F (190°C). Line baking sheets with parchment.",
+    "Whisk flour, baking soda, and salt in a bowl.",
+    "Cream butter with brown and granulated sugar until light and fluffy.",
+    "Beat in eggs one at a time, then vanilla.",
+    "Mix in dry ingredients until just combined. Fold in chocolate chips.",
+    "Scoop 2 tbsp mounds onto sheets. Bake 9-11 minutes until edges are golden and centers just set.",
+    "Cool on sheet 5 minutes, then transfer to rack."
+  ],
+  "notes": "Chill dough 30 minutes for thicker cookies.",
+  "build": [
+    { "recipes/recipe.html": "recipes/chocolate-chip-cookies.html" }
+  ]
+}

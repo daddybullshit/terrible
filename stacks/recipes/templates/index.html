@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>{{site_name}} · {{site_tagline}}</title>
+  <link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__text">
+      <p class="eyebrow">Recipe Collection</p>
+      <h1>{{site_name}}</h1>
+      <p class="tagline">{{site_tagline}}</p>
+      <p class="meta">Curated by {{author}}</p>
+    </div>
+  </header>
+
+  <main class="content">
+    <section class="grid">
+      {{#each stack._objects._entries}}
+        {{#if (inherits (lookup this "class") "recipe" ../stack._classes)}}
+          <article class="card">
+           {{#with (lookup this "properties") as |props|}}
+             <div class="card__header">
+               <p class="pill">{{lookup ../this "class"}}</p>
+                <p class="pill"><a class="pill-link" href="difficulty/{{lookup props "difficulty"}}.html">{{lookup props "difficulty"}}</a></p>
+             </div>
+             <h2>{{lookup props "title"}}</h2>
+             <p class="muted">Serves {{lookup props "servings"}} · Prep {{lookup props "prep_time_minutes"}} min · Cook {{lookup props "cook_time_minutes"}} min</p>
+             <div class="tags">
+               {{#each (lookup ../this "tags")}}
+                  <a class="tag" href="tags/{{this}}.html">{{this}}</a>
+                {{/each}}
+              </div>
+              <a class="button" href="recipes/{{#if (lookup props "slug")}}{{lookup props "slug"}}{{else}}{{lookup ../this "id"}}{{/if}}.html">View recipe</a>
+            {{/with}}
+          </article>
+        {{/if}}
+      {{/each}}
+    </section>
+
+    {{#with stack as |stackCtx|}}
+      <section class="panel">
+        <h2>Browse by Tag</h2>
+        <div class="tag-cloud">
+          {{#each stackCtx._tags._entries}}
+          <a class="tag" href="tags/{{identity tag}}.html">{{identity tag}} ({{length ids}})</a>
+          {{/each}}
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>Browse by Difficulty</h2>
+        <div class="tag-cloud">
+          <a class="tag" href="difficulty/easy.html">easy ({{difficultyCount stackCtx._objects._entries "easy" stackCtx._classes}})</a>
+          <a class="tag" href="difficulty/medium.html">medium ({{difficultyCount stackCtx._objects._entries "medium" stackCtx._classes}})</a>
+          <a class="tag" href="difficulty/hard.html">hard ({{difficultyCount stackCtx._objects._entries "hard" stackCtx._classes}})</a>
+        </div>
+      </section>
+
+      {{!-- Generate tag pages --}}
+      {{#each stackCtx._tags._entries}}
+        {{#file (concat "tags/" tag ".html")}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Tag: {{identity tag}} · {{site_name}}</title>
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+  <header class="subhero">
+    <div class="subhero__text">
+      <p class="eyebrow">Tag</p>
+      <h1>{{identity tag}}</h1>
+      <a class="button" href="../index.html">← Back to recipes</a>
+    </div>
+  </header>
+  <main class="content">
+    <div class="grid">
+      {{#each @root.stack._objects._entries}}
+        {{#if (and (inherits class "recipe" @root.stack._classes) (includes tags ../tag))}}
+          <article class="card">
+            <div class="card__header">
+              <p class="pill"><a class="pill-link" href="../difficulty/{{lookup properties "difficulty"}}.html">{{lookup properties "difficulty"}}</a></p>
+            </div>
+            <h2>{{lookup properties "title"}}</h2>
+            <p class="muted">Serves {{lookup properties "servings"}} · Prep {{lookup properties "prep_time_minutes"}} min · Cook {{lookup properties "cook_time_minutes"}} min</p>
+            <div class="tags">
+              {{#each tags}}
+                <a class="tag" href="../tags/{{identity this}}.html">{{identity this}}</a>
+              {{/each}}
+            </div>
+            <a class="button" href="../recipes/{{#if (lookup properties "slug")}}{{lookup properties "slug"}}{{else}}{{identity id}}{{/if}}.html">View recipe</a>
+          </article>
+        {{/if}}
+      {{/each}}
+    </div>
+  </main>
+  <footer class="footer">
+    <p>Made with Terrible · {{site_name}}</p>
+  </footer>
+</body>
+</html>
+        {{/file}}
+      {{/each}}
+
+      {{!-- Generate difficulty pages --}}
+      {{#each (array "easy" "medium" "hard")}}
+        {{#file (concat "difficulty/" this ".html") level=this}}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Difficulty: {{identity level}} · {{site_name}}</title>
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+  <header class="subhero">
+    <div class="subhero__text">
+      <p class="eyebrow">Difficulty</p>
+      <h1>{{identity level}}</h1>
+      <a class="button" href="../index.html">← Back to recipes</a>
+    </div>
+  </header>
+  <main class="content">
+    <div class="grid">
+      {{#each @root.stack._objects._entries}}
+        {{#if (and (inherits class "recipe" @root.stack._classes) (eq (lookup properties "difficulty") ../level))}}
+          <article class="card">
+            <div class="card__header">
+              <p class="pill"><a class="pill-link" href="{{lookup properties "difficulty"}}.html">{{lookup properties "difficulty"}}</a></p>
+            </div>
+            <h2>{{lookup properties "title"}}</h2>
+            <p class="muted">Serves {{lookup properties "servings"}} · Prep {{lookup properties "prep_time_minutes"}} min · Cook {{lookup properties "cook_time_minutes"}} min</p>
+            <div class="tags">
+              {{#each tags}}
+                <a class="tag" href="../tags/{{identity this}}.html">{{identity this}}</a>
+              {{/each}}
+            </div>
+            <a class="button" href="../recipes/{{#if (lookup properties "slug")}}{{lookup properties "slug"}}{{else}}{{identity id}}{{/if}}.html">View recipe</a>
+          </article>
+        {{/if}}
+      {{/each}}
+    </div>
+  </main>
+  <footer class="footer">
+    <p>Made with Terrible · {{site_name}}</p>
+  </footer>
+</body>
+</html>
+        {{/file}}
+      {{/each}}
+    {{/with}}
+  </main>
+
+  <footer class="footer">
+    <p>Made with Terrible · {{site_name}}</p>
+  </footer>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "id": "beef_wellington",
+  "class": "recipe",
+  "title": "Beef Wellington",
+  "servings": 6,
+  "prep_time_minutes": 45,
+  "cook_time_minutes": 60,
+  "difficulty": "hard",
+  "slug": "beef-wellington",
+  "tags": ["celebration", "holiday", "beef"],
+  "ingredients": [
+    "1kg center-cut beef tenderloin",
+    "2 tbsp olive oil",
+    "Salt and pepper",
+    "300g mushrooms, finely chopped",
+    "2 shallots, minced",
+    "2 cloves garlic, minced",
+    "2 tbsp butter",
+    "2 tbsp Dijon mustard",
+    "6-8 slices prosciutto",
+    "1 sheet puff pastry",
+    "2 egg yolks, beaten"
+  ],
+  "steps": [
+    "Season beef and sear on all sides in hot oil until browned. Cool, then brush with Dijon.",
+    "Cook mushrooms, shallots, and garlic in butter until dry and concentrated. Cool completely.",
+    "On plastic wrap, lay prosciutto slightly overlapping. Spread mushroom duxelles over prosciutto. Place beef on top and roll tightly. Chill 20 minutes.",
+    "Wrap beef/prosciutto in puff pastry, sealing edges. Chill 20 minutes.",
+    "Brush with egg yolk. Score pastry lightly. Bake at 400°F (205°C) for 35-45 minutes until pastry is golden and internal temp hits ~125°F (52°C) for medium-rare.",
+    "Rest 10 minutes before slicing."
+  ],
+  "notes": "Chilling between steps helps maintain shape; use an instant-read thermometer.",
+  "build": [
+    { "recipes/recipe.html": "recipes/beef-wellington.html" }
+  ]
+}

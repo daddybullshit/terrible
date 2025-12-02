@@ -1,0 +1,31 @@
+{
+  "id": "tiramisu",
+  "class": "recipe",
+  "title": "Tiramisu",
+  "servings": 8,
+  "prep_time_minutes": 30,
+  "cook_time_minutes": 0,
+  "difficulty": "medium",
+  "slug": "tiramisu",
+  "tags": ["dessert", "coffee", "celebration"],
+  "ingredients": [
+    "300g ladyfinger cookies",
+    "500g mascarpone",
+    "4 large eggs, separated",
+    "1/2 cup sugar",
+    "1 1/2 cups strong coffee, cooled",
+    "3 tbsp coffee liqueur (optional)",
+    "Cocoa powder for dusting"
+  ],
+  "steps": [
+    "Beat egg yolks with sugar until pale and thick. Fold in mascarpone until smooth.",
+    "Whip egg whites to stiff peaks; fold gently into mascarpone mixture.",
+    "Combine coffee and liqueur. Quickly dip ladyfingers and layer in dish.",
+    "Spread half the mascarpone mixture. Repeat with another layer of dipped ladyfingers and remaining cream.",
+    "Cover and chill at least 4 hours (overnight best). Dust with cocoa before serving."
+  ],
+  "notes": "Use pasteurized eggs if concerned; don’t oversoak ladyfingers.",
+  "build": [
+    { "recipes/recipe.html": "recipes/tiramisu.html" }
+  ]
+}

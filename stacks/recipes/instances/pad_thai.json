@@ -1,0 +1,34 @@
+{
+  "id": "pad_thai",
+  "class": "recipe",
+  "title": "Chicken Pad Thai",
+  "servings": 3,
+  "prep_time_minutes": 15,
+  "cook_time_minutes": 15,
+  "difficulty": "medium",
+  "slug": "pad-thai",
+  "tags": ["noodles", "quick", "crowd-pleaser"],
+  "ingredients": [
+    "200g rice noodles",
+    "200g chicken thigh, sliced",
+    "2 eggs",
+    "1 cup bean sprouts",
+    "2 green onions, sliced",
+    "1/3 cup roasted peanuts, chopped",
+    "2 tbsp oil",
+    "For sauce: 3 tbsp tamarind concentrate, 3 tbsp fish sauce, 2 tbsp brown sugar, 1 tbsp soy sauce",
+    "Lime wedges and cilantro for serving"
+  ],
+  "steps": [
+    "Soak rice noodles in warm water until pliable; drain.",
+    "Whisk sauce ingredients together until sugar dissolves.",
+    "Stir-fry chicken in hot oil until cooked. Push aside, scramble eggs until just set.",
+    "Add noodles and sauce. Toss over medium-high heat until noodles are glossy and coated.",
+    "Add bean sprouts and green onions; cook 1 minute.",
+    "Plate and top with peanuts, cilantro, and lime."
+  ],
+  "notes": "Balance sauce to taste: more tamarind for tang, more sugar for sweetness.",
+  "build": [
+    { "recipes/recipe.html": "recipes/pad-thai.html" }
+  ]
+}

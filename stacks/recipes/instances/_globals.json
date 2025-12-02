@@ -1,0 +1,9 @@
+{
+  "site_name": "Home Kitchen",
+  "site_tagline": "Comfort food and crowd-pleasers",
+  "author": "Terrible Kitchen",
+  "build": [
+    { "index.html": "/index.html" },
+    { "styles.css": "assets/styles.css" }
+  ]
+}
