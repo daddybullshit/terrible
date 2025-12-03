@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Difficulty: {{identity level}} · {{site_name}}</title>
+  <link rel="stylesheet" href="../assets/styles.css">
+</head>
+<body>
+  <header class="subhero">
+    <div class="container subhero__text">
+      <p class="eyebrow">Difficulty</p>
+      <h1>{{identity level}}</h1>
+      <p class="muted">{{length entries}} recipes at this level.</p>
+      <a class="button" href="../index.html">← Back to recipes</a>
+    </div>
+  </header>
+  <main class="content container">
+    <div class="grid card-grid">
+      {{#each entries}}
+        {{#if (inherits class "recipe" @root.classes)}}
+          <article class="card">
+            <div class="card__header">
+              <p class="pill pill--accent"><a class="pill-link" href="{{lookup properties "difficulty"}}.html">{{lookup properties "difficulty"}}</a></p>
+            </div>
+            <h2 class="card__title">{{lookup properties "title"}}</h2>
+            <ul class="meta-grid">
+              <li><span>Serves</span><strong>{{lookup properties "servings"}}</strong></li>
+              <li><span>Prep</span><strong>{{lookup properties "prep_time_minutes"}} min</strong></li>
+              <li><span>Cook</span><strong>{{lookup properties "cook_time_minutes"}} min</strong></li>
+            </ul>
+            <div class="tags">
+              {{#each (lookup properties "tags")}}
+                <a class="tag" href="../tags/{{identity this}}.html">{{identity this}}</a>
+              {{/each}}
+            </div>
+            <a class="button button--block" href="../recipes/{{#if (lookup properties "slug")}}{{lookup properties "slug"}}{{else}}{{identity id}}{{/if}}.html">View recipe</a>
+          </article>
+        {{/if}}
+      {{/each}}
+    </div>
+  </main>
+  <footer class="footer">
+    <p>Made with Terrible · {{site_name}}</p>
+  </footer>
+</body>
+</html>

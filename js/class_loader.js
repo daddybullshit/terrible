@@ -1,61 +1,44 @@
 const path = require('path');
-const fs = require('fs');
-const { readJsonFile } = require('./json_utils');
 const { deepMerge, mergeValue } = require('./merge_utils');
-const { mergeTags, setHiddenTags } = require('./tag_utils');
+const { findJsonFiles, readJsonFile } = require('./fs_utils');
 
-function collectClassFiles(dirPath) {
-  const files = [];
-  function walk(current) {
-    let entries;
-    try {
-      entries = fs.readdirSync(current, { withFileTypes: true });
-    } catch (err) {
-      throw new Error(`Unable to read classes directory ${current}: ${err.message}`);
-    }
-    entries
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .forEach(entry => {
-        const entryPath = path.join(current, entry.name);
-        if (entry.isDirectory()) {
-          walk(entryPath);
-        } else if (entry.isFile() && entry.name.endsWith('.json')) {
-          files.push({
-            abs: entryPath,
-            rel: path.relative(dirPath, entryPath)
-          });
-        }
-      });
-  }
-  walk(dirPath);
-  files.sort((a, b) => {
-    const depthA = a.rel.split(path.sep).length;
-    const depthB = b.rel.split(path.sep).length;
-    if (depthA !== depthB) {
-      return depthA - depthB;
-    }
-    return a.rel.localeCompare(b.rel);
-  });
-  return files.map(f => f.abs);
-}
-
+// Load class definitions and optional external schemas from a directory.
+// Supports:
+//   - <name>.json          -> class definition (must include "class")
+//   - <name>.schema.json   -> schema file (may omit "class"; derived from filename)
 function loadClassFiles(dirPath, log) {
-  if (!fs.existsSync(dirPath)) {
-    return [];
+  let classFiles = [];
+  try {
+    classFiles = findJsonFiles(dirPath);
+  } catch (err) {
+    throw new Error(`Unable to read classes directory ${dirPath}: ${err.message}`);
   }
 
-  return collectClassFiles(dirPath)
+  return classFiles
     .map(filePath => {
-      const obj = readJsonFile(filePath);
-      if (!obj.class || typeof obj.class !== 'string') {
-        log.warn(`Class definition ${filePath} is missing required string property 'class'; skipping`);
+      const isSchemaFile = filePath.endsWith('.schema.json');
+      const data = readJsonFile(filePath);
+
+      if (isSchemaFile) {
+        const base = path.basename(filePath, '.schema.json');
+        const className = typeof data.class === 'string' ? data.class : base;
+        if (!className) {
+          log.warn(`Schema file ${filePath} could not determine class name; expected filename <class>.schema.json or "class" field.`);
+          return null;
+        }
+        return { type: 'schema', class: className, schema: data };
+      }
+
+      if (!data.class || typeof data.class !== 'string') {
+        log.warn(`Class definition ${filePath} is missing required string field 'class'; skipping`);
         return null;
       }
-      return obj;
+      return { ...data };
     })
     .filter(Boolean);
 }
 
+// Merge class definitions with stack definitions overriding defaults.
 function mergeClassDefinitions(defaultsDir, stackDir, log) {
   const classDefs = [
     ...loadClassFiles(defaultsDir, log),
@@ -65,12 +48,22 @@ function mergeClassDefinitions(defaultsDir, stackDir, log) {
   const classMap = new Map();
   classDefs.forEach(def => {
     const existing = classMap.get(def.class);
+
+    // Merge standalone schema files into the class definition.
+    if (def.type === 'schema') {
+      const next = existing ? { ...existing } : { class: def.class };
+      next.schema = next.schema ? deepMerge(next.schema, def.schema) : def.schema;
+      classMap.set(def.class, next);
+      return;
+    }
+
     const merged = existing ? deepMerge(existing, def) : def;
     classMap.set(def.class, merged);
   });
   return classMap;
 }
 
+// Recursively resolve inheritance for a class, caching results.
 function resolveClass(name, classMap, memo, stack, log) {
   if (memo.has(name)) {
     return memo.get(name);
@@ -101,6 +94,7 @@ function resolveClass(name, classMap, memo, stack, log) {
   return resolved;
 }
 
+// Resolve every class definition, expanding inheritance.
 function resolveClasses(classMap, log) {
   const memo = new Map();
   Array.from(classMap.keys()).forEach(name => {
@@ -109,33 +103,63 @@ function resolveClasses(classMap, log) {
   return memo;
 }
 
-function applyClassDefaults(obj, resolvedClasses, log) {
+// Apply resolved class defaults onto an object, respecting append/reset semantics.
+function applyClassDefaults(obj, resolvedClasses, log, issues) {
   if (!obj || typeof obj.class !== 'string') {
     return;
   }
   const classDef = resolvedClasses.get(obj.class);
   if (!classDef) {
-    log.warn(`Object '${obj.id}' references unknown class '${obj.class}'.`);
+    if (issues) {
+      issues.warn(`Object '${obj.id}' references unknown class '${obj.class}'.`, {
+        code: 'unknown_class',
+        id: obj.id,
+        class: obj.class
+      });
+    } else {
+      log.warn(`Object '${obj.id}' references unknown class '${obj.class}'.`);
+    }
     return;
   }
 
-  const classTags = Array.isArray(classDef.tags) ? classDef.tags : [];
-  const currentTags = Array.isArray(obj.__tags) ? obj.__tags : (Array.isArray(obj.tags) ? obj.tags : []);
-  const mergedTags = mergeTags(classTags, currentTags);
-  setHiddenTags(obj, mergedTags);
-  obj.tags = mergedTags;
+  // Warn if required fields (from class schema) are missing before defaults apply.
+  const requiredFields = Array.isArray(classDef.schema && classDef.schema.required)
+    ? classDef.schema.required
+    : [];
+  const requiredSet = new Set(requiredFields);
+  requiredFields.forEach(field => {
+    if (obj[field] === undefined) {
+      const message = `Object '${obj.id}' is missing required field '${field}' (class '${obj.class}') before defaults; validation will fail unless the instance provides it.`;
+      if (issues) {
+        issues.warn(message, {
+          code: 'required_missing_pre_defaults',
+          id: obj.id,
+          class: obj.class,
+          field
+        });
+      } else {
+        log.warn(message);
+      }
+    }
+  });
 
   Object.entries(classDef).forEach(([key, value]) => {
-    if (['class', 'parent', 'id', 'tags'].includes(key)) {
+    if (['class', 'parent', 'id', 'schema'].includes(key)) {
       return;
     }
     if (value === null || value === undefined) {
+      return;
+    }
+    const isRequired = requiredSet.has(key);
+    if (isRequired && obj[key] === undefined) {
+      // Leave required fields untouched so validation can catch truly missing data.
       return;
     }
     obj[key] = mergeValue(value, obj[key]);
   });
 }
 
+// Load, merge, and resolve classes from defaults + stack directories.
 function loadResolvedClasses(stackDir, defaultsDir, log) {
   const defaultsClassesDir = path.join(defaultsDir, 'classes');
   const stackClassesDir = path.join(stackDir, 'classes');

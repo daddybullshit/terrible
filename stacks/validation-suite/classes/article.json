@@ -1,0 +1,57 @@
+{
+  "class": "article",
+  "parent": "record",
+  "status": "active",
+  "schema": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "id": { "type": "string" },
+      "class": { "const": "article" },
+      "title": { "type": "string" },
+      "slug": { "type": "string" },
+      "summary": { "type": "string" },
+      "tags": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "$reset": { "const": true },
+              "value": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["$reset", "value"]
+          }
+        ]
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "owner": { "type": "string" },
+          "priority": { "type": "integer", "minimum": 1 }
+        }
+      },
+      "build": {
+        "type": "array",
+        "items": {
+          "anyOf": [
+            { "type": "string" },
+            {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          ]
+        }
+      }
+    },
+    "required": { "$reset": true, "value": ["id", "class", "title", "status", "slug", "build"] }
+  }
+}

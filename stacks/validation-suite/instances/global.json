@@ -1,0 +1,5 @@
+{
+  "build": [
+    { "summary.txt.hbs": "validation/summary.txt" }
+  ]
+}

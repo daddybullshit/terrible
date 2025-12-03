@@ -7,6 +7,7 @@
   "cook_time_minutes": 15,
   "difficulty": "medium",
   "slug": "pad-thai",
+  "image": "pad-thai.jpg",
   "tags": ["noodles", "quick", "crowd-pleaser"],
   "ingredients": [
     "200g rice noodles",

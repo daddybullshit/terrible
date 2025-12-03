@@ -1,11 +1,92 @@
 const path = require('path');
 const fs = require('fs');
-const { readJsonFile } = require('./json_utils');
-const { attachNormalizedTags } = require('./tag_utils');
 const { applyClassDefaults, loadResolvedClasses } = require('./class_loader');
-const { buildReservedObjects } = require('./reserved_builder');
 const { deepMerge } = require('./merge_utils');
+const { findJsonFiles, readJsonFile } = require('./fs_utils');
 
+const RESERVED_KEYS = new Set(['id', 'build', 'class']);
+
+// Identify whether an object id is reserved.
+function isReservedId(id) {
+  return id === 'global';
+}
+
+function isReservedKey(key) {
+  return RESERVED_KEYS.has(key);
+}
+
+// Build a map of stack objects (excluding global) exposing resolved properties.
+function buildObjectMap(stackObjects, resolvedClasses) {
+  const sortedEntries = stackObjects
+    .filter(obj => obj && obj.id && !isReservedId(obj.id))
+    .map(obj => {
+      const className = obj.class || null;
+      const classDef = className ? resolvedClasses.get(className) : null;
+      const keys = new Set();
+      if (classDef) {
+        Object.keys(classDef).forEach(k => {
+          if (!isReservedKey(k)) {
+            keys.add(k);
+          }
+        });
+      }
+      Object.keys(obj).forEach(k => {
+        if (!isReservedKey(k)) {
+          keys.add(k);
+        }
+      });
+      const properties = {};
+      Array.from(keys).sort().forEach(k => {
+        const objVal = obj[k];
+        const classVal = classDef ? classDef[k] : undefined;
+        properties[k] = objVal !== undefined ? objVal : classVal;
+      });
+      return { id: obj.id, class: className, properties };
+    })
+    .sort((a, b) => a.id.localeCompare(b.id));
+
+  return sortedEntries.reduce((acc, entry) => {
+    acc[entry.id] = entry;
+    return acc;
+  }, {});
+}
+
+// Collect class metadata for canonical export (map + array view).
+function collectClasses(resolvedClasses) {
+  const classMap = {};
+  const entries = Array.from(resolvedClasses.entries())
+    .map(([name, data]) => {
+      const { parent = null, class: _className, ...rest } = data;
+      const classData = parent ? { ...rest, parent } : { ...rest };
+      classMap[name] = classData;
+      return { class: name, parent: parent || null, properties: rest };
+    })
+    .sort((a, b) => a.class.localeCompare(b.class));
+  return { map: classMap, entries };
+}
+
+// Attach global metadata (objects/classes) to the merged stack map.
+function attachGlobalMetadata(merged, objectMap, classesData) {
+  const base = merged.get('global') || { id: 'global', build: [] };
+  const updated = { ...base };
+  updated.objects = objectMap;
+  updated.classes = classesData.map;
+  updated.classEntries = classesData.entries;
+  updated.id = 'global';
+  return updated;
+}
+
+function attachGlobalMetadataToStack(stackObjects, resolvedClasses, merged) {
+  const classesData = collectClasses(resolvedClasses);
+  const objectMap = buildObjectMap(stackObjects, resolvedClasses);
+
+  const enriched = new Map(merged);
+  enriched.set('global', attachGlobalMetadata(enriched, objectMap, classesData));
+
+  return enriched;
+}
+
+// Ensure build entries are arrays and log otherwise.
 function normalizeBuild(obj, filePath, log) {
   if (obj.build === undefined) {
     obj.build = [];
@@ -17,84 +98,60 @@ function normalizeBuild(obj, filePath, log) {
   }
 }
 
+// Parse a stack object file, defaulting id to global when omitted.
 function readStackObject(filePath, log) {
   const obj = readJsonFile(filePath);
   if (!obj.id) {
-    obj.id = '_globals';
+    obj.id = 'global';
   }
   normalizeBuild(obj, filePath, log);
-  attachNormalizedTags(obj, obj.tags, { filePath, log });
   return obj;
 }
 
-function collectJsonFiles(dirPath) {
-  const files = [];
-
-  function walk(currentDir) {
-    let entries;
-    try {
-      entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    } catch (e) {
-      throw new Error(`Unable to read stack directory ${currentDir}: ${e.message}`);
-    }
-
-    entries
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .forEach(entry => {
-        const entryPath = path.join(currentDir, entry.name);
-        if (entry.isDirectory()) {
-          walk(entryPath);
-        } else if (entry.isFile() && entry.name.endsWith('.json')) {
-          files.push({
-            abs: entryPath,
-            rel: path.relative(dirPath, entryPath)
-          });
-        }
-      });
+// Load all stack files from a directory (ordered) with optional required guard.
+function loadStackFiles(dirPath, { required, log }) {
+  let stackFiles = [];
+  try {
+    stackFiles = findJsonFiles(dirPath, { required: false });
+  } catch (err) {
+    throw new Error(`Unable to read stack directory ${dirPath}: ${err.message}`);
   }
 
-  walk(dirPath);
-  files.sort((a, b) => {
-    const depthA = a.rel.split(path.sep).length;
-    const depthB = b.rel.split(path.sep).length;
-    if (depthA !== depthB) {
-      return depthA - depthB;
-    }
-    return a.rel.localeCompare(b.rel);
-  });
-  return files.map(f => f.abs);
-}
-
-function loadStackFiles(dirPath, { required, log }) {
-  if (!fs.existsSync(dirPath)) {
-    if (required) {
+  if (required) {
+    if (!fs.existsSync(dirPath)) {
       throw new Error(`Stack directory does not exist: ${dirPath}`);
     }
-    return [];
-  }
-
-  const stackFiles = collectJsonFiles(dirPath);
-  if (required && stackFiles.length === 0) {
-    throw new Error(`No stack definition JSON files found in ${dirPath}`);
+    if (stackFiles.length === 0) {
+      throw new Error(`No stack definition JSON files found in ${dirPath}`);
+    }
   }
 
   return stackFiles.map(file => readStackObject(file, log));
 }
 
-function extractGlobals(objs) {
-  const idx = objs.findIndex(obj => obj.id === '_globals');
-  if (idx === -1) {
-    return null;
-  }
-  return objs.splice(idx, 1)[0];
+// Split out a single global object while preserving others.
+function extractGlobals(objs = []) {
+  let globalObj = null;
+  const rest = [];
+
+  objs.forEach(obj => {
+    if (!globalObj && obj && obj.id === 'global') {
+      globalObj = obj;
+      return;
+    }
+    rest.push(obj);
+  });
+
+  return { globalObj, rest };
 }
 
+// Merge default and stack globals, allowing overrides from both.
 function loadMergedGlobals(defaultsDir, defaultsObjs, stackObjs, log) {
   const globalsPaths = [
-    path.join(defaultsDir, 'globals.json')
+    path.join(defaultsDir, 'global.json')
   ];
 
-  let merged = { id: '_globals', build: [] };
+  let merged = { id: 'global', build: [] };
   globalsPaths.forEach(filePath => {
     if (!fs.existsSync(filePath)) {
       return;
@@ -107,18 +164,20 @@ function loadMergedGlobals(defaultsDir, defaultsObjs, stackObjs, log) {
     }
   });
 
-  const defaultsGlobals = extractGlobals(defaultsObjs);
-  const stackGlobals = extractGlobals(stackObjs);
+  const { globalObj: defaultsGlobals, rest: defaultsRest } = extractGlobals(defaultsObjs);
+  const { globalObj: stackGlobals, rest: stackRest } = extractGlobals(stackObjs);
   [defaultsGlobals, stackGlobals].forEach(obj => {
     if (obj) {
       merged = deepMerge(merged, obj);
     }
   });
 
-  return merged;
+  return { globals: merged, defaultsRest, stackRest };
 }
 
-function loadStack(stackDir, defaultsDir, log) {
+// Load, merge, and class-resolve stack instances; attach metadata.
+function loadStack(stackDir, defaultsDir, log, options = {}) {
+  const { issues } = options;
   if (!fs.existsSync(stackDir)) {
     throw new Error(`Stack directory does not exist: ${stackDir}`);
   }
@@ -131,7 +190,7 @@ function loadStack(stackDir, defaultsDir, log) {
   const defaultStacks = loadStackFiles(defaultsInstancesDir, { required: false, log });
   const stackInstanceStacks = loadStackFiles(stackInstancesDir, { required: true, log });
 
-  const globals = loadMergedGlobals(defaultsDir, defaultStacks, stackInstanceStacks, log);
+  const { globals, defaultsRest, stackRest } = loadMergedGlobals(defaultsDir, defaultStacks, stackInstanceStacks, log);
   const upsert = obj => {
     if (merged.has(obj.id)) {
       const mergedObj = deepMerge(merged.get(obj.id), obj);
@@ -142,19 +201,19 @@ function loadStack(stackDir, defaultsDir, log) {
     }
   };
 
-  merged.set('_globals', globals);
-  defaultStacks.forEach(upsert);
-  stackInstanceStacks.forEach(upsert);
+  merged.set('global', globals);
+  defaultsRest.forEach(upsert);
+  stackRest.forEach(upsert);
 
   const stackObjects = Array.from(merged.values());
-  stackObjects.forEach(obj => applyClassDefaults(obj, resolvedClasses, log));
+  stackObjects.forEach(obj => applyClassDefaults(obj, resolvedClasses, log, issues));
 
-  const withReserved = buildReservedObjects(stackObjects, resolvedClasses, merged, log);
+  const withMetadata = attachGlobalMetadataToStack(stackObjects, resolvedClasses, merged);
   return {
-    stackObjects: Array.from(withReserved.values()),
-    stackById: withReserved,
+    stackObjects: Array.from(withMetadata.values()),
+    stackById: withMetadata,
     resolvedClasses,
-    globals
+    global: globals
   };
 }
 

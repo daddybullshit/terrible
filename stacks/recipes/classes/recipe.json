@@ -1,8 +1,7 @@
 {
   "class": "recipe",
-  "layout": "default",
   "servings": 4,
   "prep_time_minutes": 15,
-  "cook_time_minutes": 30,
+  "cook_time_minutes": -30,
   "difficulty": "easy"
 }

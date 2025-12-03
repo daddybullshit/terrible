@@ -1,0 +1,16 @@
+{
+  "id": "article_valid",
+  "class": "article",
+  "title": "Schema walkthrough",
+  "status": "active",
+  "slug": "schema-walkthrough",
+  "summary": "Valid object exercising required fields and defaults",
+  "tags": ["docs", "validation"],
+  "metadata": {
+    "owner": "qa",
+    "priority": 1
+  },
+  "build": [
+    { "article.json.hbs": "validation/articles/article_valid.json" }
+  ]
+}

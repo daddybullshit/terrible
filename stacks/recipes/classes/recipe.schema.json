@@ -1,0 +1,55 @@
+{
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "id": { "type": "string" },
+    "class": { "const": "recipe" },
+    "title": { "type": "string" },
+    "servings": { "type": "integer", "minimum": 1 },
+    "prep_time_minutes": { "type": "integer", "minimum": 0 },
+    "cook_time_minutes": { "type": "integer", "minimum": 0 },
+    "difficulty": { "type": "string" },
+    "slug": { "type": "string" },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "ingredients": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "steps": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": { "type": "string" },
+    "image": { "type": "string" },
+    "build": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          { "type": "string" },
+          {
+            "type": "object",
+            "additionalProperties": { "type": "string" }
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "id",
+    "class",
+    "title",
+    "servings",
+    "prep_time_minutes",
+    "cook_time_minutes",
+    "difficulty",
+    "slug",
+    "tags",
+    "ingredients",
+    "steps",
+    "notes",
+    "build"
+  ]
+}

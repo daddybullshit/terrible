@@ -1,19 +1,15 @@
 const crypto = require('crypto');
 const path = require('path');
-const fs = require('fs');
+const yargs = require('yargs/yargs');
+const { hideBin } = require('yargs/helpers');
+const { normalizeDirPath } = require('./fs_utils');
 
+// Normalize a stack directory path.
 function normalizeStackDir(stackDirInput) {
-  const abs = path.isAbsolute(stackDirInput)
-    ? stackDirInput
-    : path.resolve(process.cwd(), stackDirInput);
-  const real = fs.realpathSync(abs);
-  const stat = fs.statSync(real);
-  if (!stat.isDirectory()) {
-    throw new Error(`Stack path is not a directory: ${stackDirInput}`);
-  }
-  return real;
+  return normalizeDirPath(stackDirInput);
 }
 
+// Hash a stack path to produce a short, deterministic build dir suffix.
 function stackHashFromPath(stackDir) {
   return crypto.createHash('sha256')
     .update(stackDir)
@@ -21,6 +17,7 @@ function stackHashFromPath(stackDir) {
     .slice(0, 12); // Shorten for directory name
 }
 
+// Build directory name derived from stack path + hash.
 function buildDirNameFromPath(stackDir) {
   return `${path.basename(stackDir)}-${stackHashFromPath(stackDir)}`;
 }
@@ -36,15 +33,27 @@ function getBuildDirName(stackDirInput) {
 }
 
 if (require.main === module) {
-  const stackDir = process.argv[2];
-  const mode = process.argv[3];
-  if (!stackDir) {
-    console.error('Usage: node stack_paths.js <stackDir> [--hash|--build-dir-name]');
-    process.exit(1);
-  }
+  const argv = yargs(hideBin(process.argv))
+    .usage('Usage: node stack_paths.js <stackDir> [--hash|--build-dir-name]')
+    .option('hash', {
+      type: 'boolean',
+      describe: 'Print stack hash'
+    })
+    .option('build-dir-name', {
+      type: 'boolean',
+      describe: 'Print build directory name (default)'
+    })
+    .help(false)
+    .version(false)
+    .strict()
+    .demandCommand(1, 'Stack directory is required')
+    .argv;
+
+  const stackDir = argv._[0];
+  const modeHash = argv.hash === true;
   try {
     const normalized = normalizeStackDir(stackDir);
-    if (mode === '--hash') {
+    if (modeHash) {
       console.log(stackHashFromPath(normalized));
     } else {
       console.log(buildDirNameFromPath(normalized));

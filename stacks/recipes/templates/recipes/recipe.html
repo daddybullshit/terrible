@@ -7,10 +7,15 @@
 </head>
 <body>
   <header class="subhero">
-    <div class="subhero__text">
+    <div class="container subhero__text">
       <p class="eyebrow">Recipe · {{class}}</p>
       <h1>{{title}}</h1>
-      <p class="muted">Serves {{servings}} · Prep {{prep_time_minutes}} min · Cook {{cook_time_minutes}} min · {{difficulty}}</p>
+      <ul class="meta-grid">
+        <li><span>Serves</span><strong>{{servings}}</strong></li>
+        <li><span>Prep</span><strong>{{prep_time_minutes}} min</strong></li>
+        <li><span>Cook</span><strong>{{cook_time_minutes}} min</strong></li>
+        <li><span>Difficulty</span><strong>{{difficulty}}</strong></li>
+      </ul>
       <div class="tags">
         {{#each tags}}
           <a class="tag" href="../tags/{{this}}.html">{{this}}</a>
@@ -20,9 +25,18 @@
     </div>
   </header>
 
-  <main class="content">
+  {{#if image}}
+  <div class="container recipe-image">
+    <img src="../assets/images/{{image}}" alt="{{title}}">
+  </div>
+  {{/if}}
+
+  <main class="content container">
     <section class="panel">
-      <h2>Ingredients</h2>
+      <div class="panel__header">
+        <h2>Ingredients</h2>
+        <p class="muted">Everything you need before you start cooking.</p>
+      </div>
       <ul class="list">
         {{#each ingredients}}
           <li>{{this}}</li>
@@ -31,7 +45,10 @@
     </section>
 
     <section class="panel">
-      <h2>Steps</h2>
+      <div class="panel__header">
+        <h2>Steps</h2>
+        <p class="muted">Follow along and take it at your own pace.</p>
+      </div>
       <ol class="list steps">
         {{#each steps}}
           <li>{{this}}</li>
@@ -41,14 +58,20 @@
 
     {{#if notes}}
     <section class="panel">
-      <h2>Notes</h2>
+      <div class="panel__header">
+        <h2>Notes</h2>
+        <p class="muted">Tips, swaps, or make-ahead guidance.</p>
+      </div>
       <p>{{notes}}</p>
     </section>
     {{/if}}
 
     {{#if tags}}
     <section class="panel">
-      <h2>Tags</h2>
+      <div class="panel__header">
+        <h2>Tags</h2>
+        <p class="muted">Related ideas you might also enjoy.</p>
+      </div>
       <div class="tags">
         {{#each tags}}
           <a class="tag" href="../tags/{{this}}.html">{{this}}</a>

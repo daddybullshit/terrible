@@ -14,6 +14,10 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "handlebars": "^4.7.8"
+    "ajv": "^8.17.1",
+    "dotenv": "^16.4.5",
+    "glob": "^13.0.0",
+    "handlebars": "^4.7.8",
+    "yargs": "^18.0.0"
   }
 }

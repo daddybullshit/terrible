@@ -1,0 +1,16 @@
+{
+  "id": "article_reset_tags",
+  "class": "article",
+  "title": "Array reset demo",
+  "status": "active",
+  "slug": "array-reset-demo",
+  "summary": "Uses $reset on an array to replace inherited/default tags",
+  "tags": { "$reset": true, "value": ["custom-tag", "replacement"] },
+  "metadata": {
+    "owner": "qa",
+    "priority": 3
+  },
+  "build": [
+    { "article.json.hbs": "validation/articles/article_reset_tags.json" }
+  ]
+}

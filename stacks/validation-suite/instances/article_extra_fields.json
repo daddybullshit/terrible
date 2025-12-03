@@ -1,0 +1,14 @@
+{
+  "id": "article_extra_fields",
+  "class": "article",
+  "title": "Extra fields demo",
+  "status": "active",
+  "slug": "extra-fields-demo",
+  "summary": "Contains properties not declared in schema",
+  "tags": ["validation", "extra"],
+  "unexpected_flag": true,
+  "notes": "This should be accepted, but flagged with --warn-extra-fields",
+  "build": [
+    { "article.json.hbs": "validation/articles/article_extra_fields.json" }
+  ]
+}

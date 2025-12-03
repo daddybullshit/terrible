@@ -1,0 +1,18 @@
+{
+  "id": "article_nested_extra",
+  "class": "article",
+  "title": "Nested extra field demo",
+  "status": "active",
+  "slug": "nested-extra-demo",
+  "summary": "Metadata contains an extra nested field to exercise recursive extra-field warnings",
+  "metadata": {
+    "owner": "qa",
+    "priority": 2,
+    "flags": {
+      "needs_review": true
+    }
+  },
+  "build": [
+    { "article.json.hbs": "validation/articles/article_nested_extra.json" }
+  ]
+}

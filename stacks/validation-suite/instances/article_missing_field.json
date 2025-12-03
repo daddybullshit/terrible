@@ -1,0 +1,14 @@
+{
+  "id": "article_missing_field",
+  "class": "article",
+  "title": "Missing slug triggers validation warning",
+  "status": "planned",
+  "summary": "Intentionally missing slug to exercise schema warnings",
+  "tags": ["validation", "warning"],
+  "metadata": {
+    "owner": "qa"
+  },
+  "build": [
+    { "article.json.hbs": "validation/articles/article_missing_field.json" }
+  ]
+}

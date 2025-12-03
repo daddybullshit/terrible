@@ -1,0 +1,55 @@
+{
+  "class": "record",
+  "status": "planned",
+  "schema": {
+    "type": "object",
+    "additionalProperties": true,
+    "properties": {
+      "id": { "type": "string" },
+      "class": { "const": "record" },
+      "title": { "type": "string" },
+      "status": { "type": "string", "enum": ["planned", "active", "retired"] },
+      "tags": {
+        "anyOf": [
+          {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "$reset": { "const": true },
+              "value": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "required": ["$reset", "value"]
+          }
+        ]
+      },
+      "build": {
+        "type": "array",
+        "items": {
+          "anyOf": [
+            { "type": "string" },
+            {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            }
+          ]
+        }
+      },
+      "metadata": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "owner": { "type": "string" },
+          "priority": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "required": ["id", "class", "title", "status", "build"]
+  }
+}

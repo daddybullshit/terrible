@@ -21,9 +21,15 @@ It supports:
 The system is intentionally domain-agnostic and can be applied to infrastructure provisioning, documentation generation, analytics, inventory systems, etc.
 
 ### Implementation Status (current code)
-- Implemented: JSON loader (depth-first then alphabetical), defaults-overrides-stack merge, class inheritance with array de-duplication, tag aggregation, reserved indices (`_tags`, `_objects`, `_classes`, `_reserved`), build execution via Handlebars templates, canonical export to `build/<stack-hash>/canonical.json`.
-- Partially implemented: validation is limited to structural checks (bad JSON, missing directories) with warnings for unknown classes and invalid tags/build fields.
+- Implemented: JSON loader (depth-first then alphabetical), defaults-overrides-stack merge, class inheritance with array de-duplication, global metadata (`global.objects`, `global.classes`, `global.classEntries`), build execution via Handlebars templates with automatic `resolve` rewrites, canonical export to `build/<stack>-<hash>/canonical.json`, and build directory cleanup before writing outputs.
+- Partially implemented: validation is limited to structural checks (bad JSON, missing directories) with warnings for unknown classes, missing templates, missing placeholder values, or invalid `build` fields (defaulted to empty). Tags remain user-defined data; no normalization or class-level injection is performed. Environment variables from a root `.env` file are loaded before running the build scripts.
 - Not yet implemented: script discovery/attachment, hook execution, script bundling (runtime/template/remote), remote packaging, mutation APIs, and sandbox/validation policies beyond the basic merge/templating pipeline.
+
+### Current behavior snapshot
+- CLI surface: build-only; stack path required, defaults path optional. Outputs write to `build/<stack>-<hash>/` after deleting any previous directory, and include a `canonical.json` snapshot.
+- Canonical shape: `{ global, classes, instances, stackById }`, where `stackById.global` carries metadata (`objects`, `classes`, `classEntries`) and top-level `global` is the merged raw global object.
+- Template context: HTML escaping disabled; helpers include filtering/grouping helpers plus utility helpers (`eq`, `and`, `default`, `concat`, `json`, `array`, `identity`, `length`, `inherits`). Placeholders resolve in order: helper/block context → current object → `global` → env vars (raw/uppercased) → provided default → unresolved with warning.
+- Data loading: files without `id` are treated as `global`; non-array `build` fields are warned and coerced to empty arrays; tags or other custom fields pass through without normalization.
 
 ---
 
@@ -31,7 +37,7 @@ The system is intentionally domain-agnostic and can be applied to infrastructure
 
 ### 2.1 Class Definitions
 
-- Classes are represented as JSON objects stored in a recursive directory structure.
+- Classes are represented as JSON objects stored in a recursive directory structure (loaded depth-first, then alphabetically; deeper paths win when merging).
 - Each class is identified by a `class` field.
 - A class defines:
   - A set of **properties**.
@@ -44,25 +50,26 @@ The system is intentionally domain-agnostic and can be applied to infrastructure
 
 ### 2.2 Instance Definitions
 
-- Instances represent concrete object definitions.
-- Each instance is identified by an `id` value contained within the JSON file.
+- Instances represent concrete object definitions loaded recursively (depth-first then alphabetical; deeper files override earlier ones when merging).
+- Each instance is identified by an `id` value contained within the JSON file; if omitted, the loader coerces the entry to the `global` object rather than erroring.
 - Instance files may reside in nested subdirectories.
 - If several files share the same instance ID, their JSON objects must be **deep-merged**.
 - Instances must support:
   - A `class` field referencing a class definition.
-  - Arbitrary additional fields beyond the class schema.
-  - A `build` field (array) listing template names to execute for this instance.
-- Files without an `id` must be merged into a special global object named `_globals`.
+  - Arbitrary additional fields beyond the class schema; values (including `tags`) are passed through as provided with no normalization.
+  - A `build` field (array) listing template names to execute for this instance; non-array values are warned and defaulted to an empty array (no renders).
+- Files without an `id` must be merged into a special global object named `global`.
 
 ### 2.3 Defaults and Stacks
 
 - The system must support:
   - A **default directory** with baseline definitions.
   - A **stack directory** chosen at runtime.
+- Default directories are optional (treated as empty when missing); stack directories are required.
 - Load order:
   1. Load and merge default classes, then stack classes, then resolve inheritance.
   2. Load and merge default instances, then stack instances, merging by `id`.
-  3. Merge `_globals` from defaults (`globals.json` and `_globals` entries) and stacks.
+  3. Merge `global` from defaults (`global.json` and `global` entries) and stacks.
   4. Apply resolved class defaults to instances.
 - Both `defaults` and `stack` directories may be recursively traversed and merged like classes/instances.
 
@@ -75,7 +82,7 @@ The system is intentionally domain-agnostic and can be applied to infrastructure
   - User-supplied overrides  
   - Script-derived modifications (if any)  
 
-This object is the canonical “Single Source of Truth” for all subsequent processing.
+Current export shape: `canonical.json` includes `{ global, classes, instances, stackById }`, where `stackById.global` holds metadata (`objects`, `classes`, `classEntries`) in addition to the merged global values, and the top-level `global` entry is the merged globals without attached metadata. This object is the canonical “Single Source of Truth” for all subsequent processing.
 
 ---
 
@@ -83,15 +90,16 @@ This object is the canonical “Single Source of Truth” for all subsequent pro
 
 ### 3.1 Template Processing
 
-- The engine uses Mustache/Handlebars-like syntax to generate static output files.
-- Rendering input is the **final canonical JSON object**.
-- Templates may live in arbitrary directories, including stack-specific or default directories.
-- The engine must be agnostic to output format (e.g., JSON, YAML, HTML, JS, Markdown, INI).
+- The engine uses Handlebars (HTML escaping disabled) with a custom `resolve` helper; plain `{{ key }}` and `{{ key|default }}` placeholders are rewritten to `resolve`.
+- Rendering input is the **final canonical JSON object** plus per-object context.
+- Templates may live in arbitrary directories, including stack-specific or default directories; stack templates override defaults of the same relative path.
+- The engine is agnostic to output format (e.g., JSON, YAML, HTML, JS, Markdown, INI).
+- Placeholder resolution order: helper/block context (e.g., hash args to `{{#file}}`) → current object → `global` → environment variables (raw then uppercased) → provided default → unresolved placeholder with a warning.
 
 ### 3.2 Build Triggers
 
 - Each instance may declare a `build` array specifying one or more templates to execute.
-- The `_globals` object may also trigger global templates (e.g., index pages, overview documents).
+- The `global` object may also trigger global templates (e.g., index pages, overview documents) and provides a canonical `objects` list for templates.
 - The build pipeline must:
   - Resolve the list of templates from `build` arrays.
   - Execute the corresponding templates with access to the canonical JSON object and the relevant instance context.
@@ -262,7 +270,7 @@ The system must support, at minimum, the following hook categories:
 ### 5.2 Hook Scope and Binding
 
 - Hooks may be bound at:
-  - Global level (via `_globals` object).
+  - Global level (via `global` object).
   - Class level (affecting all instances of a class).
   - Instance level (affecting only a particular object).
 - Resolution order must be clearly defined, for example:
@@ -342,6 +350,8 @@ The system should be designed so that future extensions can be added without bre
 ---
 
 ## 8. Non-Functional Requirements
+
+> The points below describe goals for the system; many are not yet implemented in the current build-only codebase.
 
 ### 8.1 Portability
 
