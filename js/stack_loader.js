@@ -129,14 +129,43 @@ function loadStackFiles(dirPath, { required, log }) {
   return stackFiles.map(file => readStackObject(file, log));
 }
 
+function ensureDirectoriesExist(roots, label) {
+  const missing = roots.filter(dir => !fs.existsSync(dir));
+  if (missing.length) {
+    throw new Error(`${label} directory does not exist: ${missing.join(', ')}`);
+  }
+  const notDirectories = roots.filter(dir => {
+    try {
+      return !fs.statSync(dir).isDirectory();
+    } catch (err) {
+      return true;
+    }
+  });
+  if (notDirectories.length) {
+    throw new Error(`${label} path is not a directory: ${notDirectories.join(', ')}`);
+  }
+}
+
+function inspectInstanceRoots(roots) {
+  return roots.map(root => {
+    const globalPath = path.join(root, 'global.json');
+    const instancesDir = path.join(root, 'instances');
+    let instanceFiles = [];
+    try {
+      instanceFiles = findJsonFiles(instancesDir, { required: false });
+    } catch (err) {
+      throw new Error(`Unable to read instances directory ${instancesDir}: ${err.message}`);
+    }
+    const hasGlobal = fs.existsSync(globalPath);
+    const hasInstances = instanceFiles.length > 0;
+    return { root, globalPath, instancesDir, hasGlobal, hasInstances };
+  });
+}
+
 // First pass: load/merge classes + schemas deterministically from ordered roots.
 function loadClassesAndSchemas(classDirs, log) {
   const roots = Array.isArray(classDirs) ? classDirs : [classDirs];
-  roots.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      throw new Error(`Classes directory does not exist: ${dir}`);
-    }
-  });
+  ensureDirectoriesExist(roots, 'Classes');
   const { resolvedClasses } = loadResolvedClasses(roots, log);
   return resolvedClasses;
 }
@@ -148,29 +177,20 @@ function loadInstances({ instanceDirs, resolvedClasses, log, issues }) {
     throw new Error('At least one instances root is required.');
   }
 
-  const missingRoots = roots.filter(dir => !fs.existsSync(dir));
-  if (missingRoots.length) {
-    throw new Error(`Instances directory does not exist: ${missingRoots.join(', ')}`);
+  ensureDirectoriesExist(roots, 'Instances');
+
+  const inspections = inspectInstanceRoots(roots);
+  const emptyRoots = inspections.filter(entry => !entry.hasGlobal && !entry.hasInstances).map(entry => entry.root);
+  if (emptyRoots.length) {
+    throw new Error(`No instance or global files found in ${emptyRoots.join(', ')}`);
   }
 
   const merged = new Map();
   let mergedGlobals = { id: 'global', build: [] };
-  const emptyRoots = [];
-  let anyContent = false;
 
-  roots.forEach(root => {
-    const globalPath = path.join(root, 'global.json');
-    const instancesDir = path.join(root, 'instances');
+  inspections.forEach(entry => {
+    const { globalPath, instancesDir, hasGlobal } = entry;
     const files = loadStackFiles(instancesDir, { required: false, log });
-    const hasGlobal = fs.existsSync(globalPath);
-    const hasInstances = files.length > 0;
-
-    if (!hasGlobal && !hasInstances) {
-      emptyRoots.push(root);
-      return;
-    }
-
-    anyContent = true;
 
     if (hasGlobal) {
       try {
@@ -195,14 +215,6 @@ function loadInstances({ instanceDirs, resolvedClasses, log, issues }) {
       }
     });
   });
-
-  if (emptyRoots.length) {
-    throw new Error(`No instance or global files found in ${emptyRoots.join(', ')}`);
-  }
-
-  if (!anyContent) {
-    throw new Error(`No instance or global files found in ${roots.join(', ')}`);
-  }
 
   merged.set('global', mergedGlobals);
 

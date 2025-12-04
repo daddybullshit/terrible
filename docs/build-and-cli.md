@@ -12,8 +12,8 @@ The CLI is a thin wrapper over the build pipeline. It resolves paths, loads data
 ## Pipeline stages
 1. **Templates**: load templates from each stack in declared order; later stacks override earlier ones (no alphabetical resorting).
 2. **Data**: two-pass merge:
-   - Classes/schemas: merge across stacks in declared order, normalize parents, resolve inheritance, merge schemas in the same order.
-   - Instances/global: merge across stacks in declared order; for the same `id`, later stacks override earlier ones; objects deep-merge; arrays append unless `$reset` is present.
+   - Classes/schemas: merge across stacks in declared order, normalize parents, resolve inheritance, merge schemas in the same order. Class roots must exist but may be empty (no defaults applied).
+   - Instances/global: merge across stacks in declared order; for the same `id`, later stacks override earlier ones; objects deep-merge; arrays append unless `$reset` is present. Each supplied instances root must contain `global.json` or at least one file under `instances/`; empty roots are fatal.
 3. **Prepare build**: clean/create `build/<stack>-<hash>/`; write `canonical.json`, merged class definitions, merged schemas, and `meta/validation.json`.
 4. **Render**: execute build items from `global` and each instance; warn on duplicate output paths (fatal with `--fail-on-collisions`).
 5. **Finish**: emit summary and any warnings (errors abort earlier).
@@ -25,5 +25,5 @@ The CLI is a thin wrapper over the build pipeline. It resolves paths, loads data
 - **Generated docs**: stacks may emit additional docs such as `canonical.html` viewers or inventory pages; all stay under the build root.
 
 ## Logging and failures
-- Fatal: unreadable paths, JSON parse errors, template compilation errors, invalid output paths, cycle detection failures, missing instance/global content for a supplied stack root.
+- Fatal: unreadable or non-directory paths, JSON parse errors, template compilation errors, invalid output paths, cycle detection failures, missing instance/global content for a supplied stack root.
 - Warnings: missing placeholders, missing templates, unknown classes, schema violations, extra fields (when enabled), duplicate outputs (unless promoted to errors), class roots with no class or schema files (build continues without defaults for that root).
