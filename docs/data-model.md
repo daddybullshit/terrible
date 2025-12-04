@@ -15,7 +15,7 @@ Terrible treats every build as a **stack set**: an ordered list of stack directo
 - Each instance file must include an `id`; files without an `id` are merged into the reserved `global` object.
 - `build` (array) controls which templates render for an object; invalid or missing values default to `[]`.
 - Any other fields you add stay verbatim on the object. The engine never injects tags or other special data.
-- After merging class defaults, `global.objects` is populated with `{ id, class, properties }` entries for every non-reserved object. `global.classes` and `global.classEntries` expose resolved class metadata for templates.
+- After merging class defaults, `global.objects` is populated with `{ id, class, properties }` entries for every non-reserved object. `global.classes` and `global.classEntries` expose resolved class metadata for templates. The canonical `instances` array includes `global` at index 0, followed by all instances in deterministic merge order; the map is exposed as `instancesById`.
 
 ## Classes and inheritance
 - Class files live under `classes/` and must declare `class`. Parents can be a string or an array (`parent` is normalized into `parents`). Multiple parents are merged deterministically with cycle detection.

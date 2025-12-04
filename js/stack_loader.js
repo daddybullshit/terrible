@@ -223,8 +223,10 @@ function loadInstances({ instanceDirs, resolvedClasses, log, issues }) {
 
   const withMetadata = attachGlobalMetadataToStack(stackObjects, resolvedClasses, merged);
   return {
-    stackObjects: Array.from(withMetadata.values()),
-    stackById: withMetadata,
+    stackObjects: ['global', ...Array.from(withMetadata.keys()).filter(k => k !== 'global')]
+      .map(key => withMetadata.get(key))
+      .filter(Boolean),
+    instancesById: withMetadata,
     global: mergedGlobals
   };
 }
@@ -245,11 +247,11 @@ function loadStack({ stackDirs, classDirs, instanceDirs, log, issues }) {
   const instanceRoots = Array.isArray(instanceDirs) && instanceDirs.length ? instanceDirs : stacks;
 
   const resolvedClasses = loadClassesAndSchemas(classRoots, log);
-  const { stackObjects, stackById, global } = loadInstances({ instanceDirs: instanceRoots, resolvedClasses, log, issues });
+  const { stackObjects, instancesById, global } = loadInstances({ instanceDirs: instanceRoots, resolvedClasses, log, issues });
 
   return {
     stackObjects,
-    stackById,
+    instancesById,
     resolvedClasses,
     global
   };

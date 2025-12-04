@@ -14,3 +14,4 @@ All notable changes to this project will be documented in this file. This format
 ### Changed
 - Documentation refreshed for the new inheritance model, helper set, and deterministic multi-stack CLI (README, build/CLI guide, data model, validation, template syntax).
 - Defaults stack requirement removed; multi-stack builds use a hash-based build directory name (configurable via new build-dir flags); ordering is strict by CLI position.
+- Canonical export now exposes `instancesById` (formerly `stackById`), includes `global` as the first entry in `instances`, and template contexts use `instances`/`instancesById` aliases (no legacy stack aliases).

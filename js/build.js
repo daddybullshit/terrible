@@ -104,7 +104,7 @@ function isReservedId(id) {
 
 // Resolve defaults dir relative to CWD, validating existence and type.
 // Render a template for a single build entry and write outputs (including nested file helper outputs).
-function writeTemplate(templateKey, filename, templates, buildDir, obj, stackById, log, seenOutputs, options = {}) {
+function writeTemplate(templateKey, filename, templates, buildDir, obj, instancesById, log, seenOutputs, options = {}) {
   const { failOnCollisions = false, collisionState, canonical } = options;
   const collision = (message) => {
     if (failOnCollisions) {
@@ -131,7 +131,7 @@ function writeTemplate(templateKey, filename, templates, buildDir, obj, stackByI
     templateKey,
     templateContent,
     obj,
-    stackById,
+    instancesById,
     log,
     { buildDir, outputs, canonical }
   );
@@ -238,7 +238,7 @@ function runBuild(options) {
       instanceDirs.forEach((dir, idx) => console.log(`  ${fmt(`${idx + 1}.`, 'dim')} instances:${fmt(path.join(dir, 'instances'), 'dim')}`));
     }
     const issues = createIssueCollector({ log, warningsAsErrors });
-    const { stackObjects, stackById, resolvedClasses, global } = loadStack({ stackDirs, classDirs, instanceDirs, log, issues });
+    const { stackObjects, instancesById, resolvedClasses, global } = loadStack({ stackDirs, classDirs, instanceDirs, log, issues });
     const stack = stackObjects;
     const instanceCount = stackObjects.filter(obj => obj && obj.id && !isReservedId(obj.id)).length;
     if (!quiet) {
@@ -274,8 +274,8 @@ function runBuild(options) {
       global,
       classes: mapLikeToObject(resolvedClasses),
       classHierarchy: buildClassHierarchy(resolvedClasses),
-      instances: stackObjects.filter(obj => obj && obj.id && !isReservedId(obj.id)),
-      stackById: mapLikeToObject(stackById)
+      instances: stackObjects.filter(Boolean),
+      instancesById: mapLikeToObject(instancesById)
     };
 
     if (!quiet) {
@@ -391,13 +391,13 @@ function runBuild(options) {
           if (typeof buildItem === 'string') {
             const ext = path.extname(buildItem);
             const filename = obj.id + ext;
-            writeTemplate(buildItem, filename, templates, buildDir, obj, stackById, log, outputPaths, { failOnCollisions, collisionState, canonical });
+            writeTemplate(buildItem, filename, templates, buildDir, obj, instancesById, log, outputPaths, { failOnCollisions, collisionState, canonical });
             renderedCount += 1;
             return;
           }
           if (typeof buildItem === 'object' && buildItem !== null) {
             Object.entries(buildItem).forEach(([templateKey, filename]) => {
-              writeTemplate(templateKey, filename, templates, buildDir, obj, stackById, log, outputPaths, { failOnCollisions, collisionState, canonical });
+              writeTemplate(templateKey, filename, templates, buildDir, obj, instancesById, log, outputPaths, { failOnCollisions, collisionState, canonical });
               renderedCount += 1;
             });
             return;

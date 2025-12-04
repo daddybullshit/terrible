@@ -20,7 +20,7 @@ The CLI is a thin wrapper over the build pipeline. It resolves paths, loads data
 
 ## Outputs and metadata
 - **Build root**: `build/<stack>-<hash>/`.
-- **Canonical snapshot**: `canonical.json` (merged data, class map, class hierarchy).
+- **Canonical snapshot**: `canonical.json` (merged data, class map, class hierarchy). `instances` includes `global` at index 0; the keyed map is exposed as `instancesById`.
 - **Meta**: `meta/validation.json`, `meta/class-definitions/`, `meta/class-schemas/`, plus any helper-emitted files.
 - **Generated docs**: stacks may emit additional docs such as `canonical.html` viewers or inventory pages; all stay under the build root.
 

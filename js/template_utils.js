@@ -3,7 +3,7 @@ const fs = require('fs');
 const Handlebars = require('handlebars');
 const { scanDir } = require('./fs_utils');
 const { mapLikeToObject } = require('./object_utils');
-const { globalsFromStack, metaFromOptions } = require('./template_resolution');
+const { globalsFromInstances, metaFromOptions } = require('./template_resolution');
 const { registerHelpers } = require('./template_helpers');
 
 const handlebars = Handlebars.create();
@@ -92,15 +92,16 @@ function compileTemplate(templateKey, templateContent, log) {
 }
 
 // Render a template with canonical context and attach metadata for helpers.
-function renderTemplate(templateKey, templateContent, obj, stackById, log, metaExtras = {}) {
+function renderTemplate(templateKey, templateContent, obj, instancesById, log, metaExtras = {}) {
   const compiled = compileTemplate(templateKey, templateContent, log);
-  const globalObj = globalsFromStack(stackById) || {};
+  const globalObj = globalsFromInstances(instancesById) || {};
   const { canonical } = metaExtras;
   const context = {
     ...globalObj,
     ...obj,
     global: globalObj,
-    stack: mapLikeToObject(stackById),
+    instances: mapLikeToObject(instancesById),
+    instancesById: mapLikeToObject(instancesById),
     objects: globalObj.objects,
     classes: globalObj.classes,
     canonical
@@ -108,7 +109,7 @@ function renderTemplate(templateKey, templateContent, obj, stackById, log, metaE
 
   const meta = {
     currentObj: obj,
-    stackById,
+    instancesById,
     log,
     templateKey,
     ...metaExtras

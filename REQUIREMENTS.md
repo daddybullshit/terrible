@@ -27,7 +27,7 @@ The system is intentionally domain-agnostic and can be applied to infrastructure
 
 ### Current behavior snapshot
 - CLI surface: build-only; stack path required, defaults path optional. Outputs write to `build/<stack>-<hash>/` after deleting any previous directory, and include a `canonical.json` snapshot.
-- Canonical shape: `{ global, classes, instances, stackById }`, where `stackById.global` carries metadata (`objects`, `classes`, `classEntries`) and top-level `global` is the merged raw global object.
+- Canonical shape: `{ global, classes, instances, instancesById }`, where `instancesById.global` carries metadata (`objects`, `classes`, `classEntries`) and top-level `global` is the merged raw global object. `instances` is ordered with `global` at index 0.
 - Template context: HTML escaping disabled; helpers include filtering/grouping helpers plus utility helpers (`eq`, `and`, `default`, `concat`, `json`, `array`, `identity`, `length`, `inherits`). Placeholders resolve in order: helper/block context → current object → `global` → env vars (raw/uppercased) → provided default → unresolved with warning.
 - Data loading: files without `id` are treated as `global`; non-array `build` fields are warned and coerced to empty arrays; tags or other custom fields pass through without normalization.
 
@@ -82,7 +82,7 @@ The system is intentionally domain-agnostic and can be applied to infrastructure
   - User-supplied overrides  
   - Script-derived modifications (if any)  
 
-Current export shape: `canonical.json` includes `{ global, classes, instances, stackById }`, where `stackById.global` holds metadata (`objects`, `classes`, `classEntries`) in addition to the merged global values, and the top-level `global` entry is the merged globals without attached metadata. This object is the canonical “Single Source of Truth” for all subsequent processing.
+Current export shape: `canonical.json` includes `{ global, classes, instances, instancesById }`, where `instancesById.global` holds metadata (`objects`, `classes`, `classEntries`) in addition to the merged global values, and the top-level `global` entry is the merged globals without attached metadata. `instances` includes `global` at index 0, followed by all instances in deterministic merge order. This object is the canonical “Single Source of Truth” for all subsequent processing.
 
 ---
 

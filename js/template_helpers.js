@@ -1,6 +1,5 @@
 const {
   classInheritsFrom,
-  classInheritsFromMulti,
   mergedSchemaFor,
   schemaRequires,
   schemaHasProp,
@@ -37,7 +36,7 @@ function registerHelpers(handlebars, { metaFromOptions: metaFn = metaFromOptions
       def = undefined;
     }
     const meta = metaFromOpts(opts);
-    return resolveTagValue(String(tag), def, meta.currentObj, meta.stackById, meta.log, this);
+    return resolveTagValue(String(tag), def, meta.currentObj, meta.instancesById, meta.log, this);
   });
 
   handlebars.registerHelper('json', function jsonHelper(value) {

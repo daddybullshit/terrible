@@ -4,7 +4,7 @@ const { deepMerge } = require('./merge_utils');
 function metaFromOptions(options) {
   return options && options.data && options.data._terrible
     ? options.data._terrible
-    : { currentObj: {}, stackById: new Map(), log: console };
+    : { currentObj: {}, instancesById: new Map(), log: console };
 }
 
 // Fetch an env value case-insensitively.
@@ -19,26 +19,26 @@ function envValueForTag(tag) {
   return undefined;
 }
 
-// Get the global object from a stack map (Map or plain object).
-function globalsFromStack(stackById) {
-  if (!stackById) {
+// Get the global object from an instances map (Map or plain object).
+function globalsFromInstances(instancesById) {
+  if (!instancesById) {
     return undefined;
   }
-  return stackById.get ? stackById.get('global') : stackById.global;
+  return instancesById.get ? instancesById.get('global') : instancesById.global;
 }
 
 // Resolve a template tag against context, stack/global data, env, or default.
-function resolveTagValue(tag, defaultValue, obj, stackById, log, context) {
-  const globalObj = globalsFromStack(stackById);
+function resolveTagValue(tag, defaultValue, obj, instancesById, log, context) {
+  const globalObj = globalsFromInstances(instancesById);
 
   if (context && Object.prototype.hasOwnProperty.call(context, tag)) {
     return context[tag];
   }
 
-  if (tag.includes('.') && stackById) {
+  if (tag.includes('.') && instancesById) {
     const [targetId, targetKey] = tag.split('.', 2);
     if (targetId && targetKey) {
-      const targetObj = stackById.get ? stackById.get(targetId) : stackById[targetId];
+      const targetObj = instancesById.get ? instancesById.get(targetId) : instancesById[targetId];
       if (targetObj && Object.prototype.hasOwnProperty.call(targetObj, targetKey)) {
         return targetObj[targetKey];
       }
@@ -131,9 +131,6 @@ function classInheritsFrom(className, targetName, classesObj) {
   }
   return false;
 }
-
-// Backward compatible alias kept for existing callers.
-const classInheritsFromMulti = classInheritsFrom;
 
 // Convert any list-like value to an array (Map, object, array).
 function toArray(value) {
@@ -321,13 +318,12 @@ function requiredFieldsBySource(className, classesObj) {
 
 module.exports = {
   classInheritsFrom,
-  classInheritsFromMulti,
   parentsFor,
   entriesFrom,
   filterEntriesByInheritance,
   filterList,
   getByPath,
-  globalsFromStack,
+  globalsFromInstances,
   metaFromOptions,
   resolveTagValue,
   targetIncludes,
