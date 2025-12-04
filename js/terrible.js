@@ -70,6 +70,19 @@ const parser = yargs(hideBin(process.argv))
           describe: 'Suppress non-error output (errors still printed)'
         })
   )
+  .command(
+    'test',
+    'Run regression tests',
+    () => {},
+    () => {
+      const { spawnSync } = require('child_process');
+      const result = spawnSync('node', ['tests/regression.test.js'], {
+        stdio: 'inherit',
+        cwd: repoRoot
+      });
+      process.exit(result.status || 0);
+    }
+  )
   .help()
   .strict()
   .showHelpOnFail(false);
