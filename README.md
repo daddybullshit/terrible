@@ -6,6 +6,7 @@ Terrible turns JSON-defined stacks into real outputs. Provide classes, instances
 - Prerequisite: Node.js 18+.
 - Install once: `npm install` (or `npm ci`).
 - Build: `./bin/terrible build stacks/recipes` (add more stacks positionally or via `--stack`; use `--classes-from`/`--instances-from` to source data from specific stacks). Control outputs with `--build-root`, `--build-name`, `--build-dir`, and `--hash/--no-hash`. Run the binary from any directory; outputs land in `build/<stack>-<hash>/` by default with a `canonical.json` snapshot.
+- Tests: `./bin/terrible test` runs the regression suite.
 - Helpful flags: `--warnings-as-errors`, `--warn-extra-fields`, `--fail-on-collisions`, `--quiet`. A root `.env` is loaded automatically if present.
 
 ## What Terrible gives you

@@ -4,6 +4,7 @@ The CLI is a thin wrapper over the build pipeline. It resolves paths, loads data
 
 ## CLI usage
 - Build: `./bin/terrible build stacks/recipes stacks/validation-suite` (positional stacks) or `./bin/terrible build --stack stacks/recipes --stack stacks/validation-suite` (repeatable flag). At least one stack is required.
+- Tests: `./bin/terrible test` runs the regression suite.
 - Optional sources: `--classes-from <stackDir>` and/or `--instances-from <stackDir>` to pull classes or instances/global from specific stacks (defaults to the `--stack` list and order).
 - Output control: `--build-root <dir>` to change the root (default `<repo>/build`); `--build-name <name>` to set the build directory name; `--build-dir <path>` for a full path override; `--hash/--no-hash` toggles hash suffixing when auto-naming.
 - Flags: `--warnings-as-errors`, `--warn-extra-fields`, `--fail-on-collisions`, `--quiet`.
