@@ -1,5 +1,13 @@
 const {
   classInheritsFrom,
+  classInheritsFromMulti,
+  mergedSchemaFor,
+  schemaRequires,
+  schemaHasProp,
+  schemaProperties,
+  schemaPropertySource,
+  classLineage,
+  requiredFieldsBySource,
   entriesFrom,
   filterEntriesByInheritance,
   filterList,
@@ -69,6 +77,66 @@ function registerHelpers(handlebars, { metaFromOptions: metaFn = metaFromOptions
     return classInheritsFrom(className, targetName, classesObj);
   });
 
+  function resolveInheritsTargets(args) {
+    const items = Array.from(args);
+    const options = items.pop();
+    const possibleClasses = items.pop();
+    const targets = items.slice(1); // skip className
+    const classesObj = possibleClasses && typeof possibleClasses === 'object' && !Array.isArray(possibleClasses)
+      ? possibleClasses
+      : options.hash && options.hash.classes;
+    return { targets, classesObj, options };
+  }
+
+  handlebars.registerHelper('inherits_any', function inheritsAnyHelper(className) {
+    const { targets, classesObj } = resolveInheritsTargets(arguments);
+    if (!className || !targets.length) {
+      return false;
+    }
+    return targets.some(target => classInheritsFrom(className, target, classesObj));
+  });
+
+  handlebars.registerHelper('inherits_all', function inheritsAllHelper(className) {
+    const { targets, classesObj } = resolveInheritsTargets(arguments);
+    if (!className || !targets.length) {
+      return false;
+    }
+    return targets.every(target => classInheritsFrom(className, target, classesObj));
+  });
+
+  // Legacy beta helpers kept for compatibility.
+  handlebars.registerHelper('beta_inherits_any', function betaInheritsAnyHelper(className) {
+    const args = Array.from(arguments);
+    const options = args.pop();
+    const possibleClasses = args.pop();
+    const targets = args.slice(1); // skip className
+    const classesObj = possibleClasses && typeof possibleClasses === 'object' && !Array.isArray(possibleClasses)
+      ? possibleClasses
+      : options.hash && options.hash.classes;
+    if (!className || !targets.length) {
+      return false;
+    }
+    return targets.some(target => classInheritsFrom(className, target, classesObj));
+  });
+
+  handlebars.registerHelper('beta_inherits_all', function betaInheritsAllHelper(className) {
+    const args = Array.from(arguments);
+    const options = args.pop();
+    const possibleClasses = args.pop();
+    const targets = args.slice(1); // skip className
+    const classesObj = possibleClasses && typeof possibleClasses === 'object' && !Array.isArray(possibleClasses)
+      ? possibleClasses
+      : options.hash && options.hash.classes;
+    if (!className || !targets.length) {
+      return false;
+    }
+    return targets.every(target => classInheritsFrom(className, target, classesObj));
+  });
+
+  handlebars.registerHelper('beta_filter_inherits', function betaFilterInheritsHelper(entries, targetName, classesObj) {
+    return filterEntriesByInheritance(entries, targetName, classesObj);
+  });
+
   handlebars.registerHelper('eq', function eqHelper(a, b) {
     return a === b;
   });
@@ -77,6 +145,21 @@ function registerHelpers(handlebars, { metaFromOptions: metaFn = metaFromOptions
     const args = Array.from(arguments);
     args.pop(); // options
     return args.every(Boolean);
+  });
+
+  handlebars.registerHelper('or', function orHelper() {
+    const args = Array.from(arguments);
+    args.pop(); // options
+    return args.some(Boolean);
+  });
+
+  handlebars.registerHelper('partial_exists', function partialExistsHelper(name) {
+    if (!name) {
+      return false;
+    }
+    const key = String(name);
+    const partials = handlebars.partials || {};
+    return Boolean(partials[key]);
   });
 
   handlebars.registerHelper('includes_any', function includesAnyHelper(list) {
@@ -134,6 +217,37 @@ function registerHelpers(handlebars, { metaFromOptions: metaFn = metaFromOptions
     return filterEntriesByInheritance(entries, targetName, classesObj);
   });
 
+  // Schema-aware helpers (inheritance-aware).
+  handlebars.registerHelper('schema_required', function schemaRequiredHelper(className, prop, classesObj) {
+    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    return schemaRequires(className, prop, classes);
+  });
+
+  handlebars.registerHelper('schema_has', function schemaHasHelper(className, prop, classesObj) {
+    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    return schemaHasProp(className, prop, classes);
+  });
+
+  handlebars.registerHelper('schema_props', function schemaPropsHelper(className, classesObj) {
+    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    return schemaProperties(className, classes);
+  });
+
+  handlebars.registerHelper('schema_prop_source', function schemaPropSourceHelper(className, prop, classesObj) {
+    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    return schemaPropertySource(className, prop, classes) || '';
+  });
+
+  handlebars.registerHelper('class_lineage', function classLineageHelper(className, classesObj) {
+    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    return classLineage(className, classes);
+  });
+
+  handlebars.registerHelper('schema_required_by_source', function schemaRequiredBySourceHelper(className, classesObj) {
+    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    return requiredFieldsBySource(className, classes);
+  });
+
   handlebars.registerHelper('length', function lengthHelper(value) {
     if (Array.isArray(value)) {
       return value.length;
@@ -150,6 +264,10 @@ function registerHelpers(handlebars, { metaFromOptions: metaFn = metaFromOptions
 
   handlebars.registerHelper('compact', function compactHelper(listLike) {
     return toArray(listLike).filter(Boolean);
+  });
+
+  handlebars.registerHelper('reverse', function reverseHelper(listLike) {
+    return toArray(listLike).slice().reverse();
   });
 
   handlebars.registerHelper('uniq', function uniqHelper(listLike) {

@@ -90,13 +90,15 @@ function compileTemplate(templateKey, templateContent, log) {
 function renderTemplate(templateKey, templateContent, obj, stackById, log, metaExtras = {}) {
   const compiled = compileTemplate(templateKey, templateContent, log);
   const globalObj = globalsFromStack(stackById) || {};
+  const { canonical } = metaExtras;
   const context = {
     ...globalObj,
     ...obj,
     global: globalObj,
     stack: mapLikeToObject(stackById),
     objects: globalObj.objects,
-    classes: globalObj.classes
+    classes: globalObj.classes,
+    canonical
   };
 
   const meta = {

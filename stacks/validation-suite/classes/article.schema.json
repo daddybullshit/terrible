@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "class": { "const": "article" },
+    "slug": { "type": "string" },
+    "summary": { "type": "string" }
+  },
+  "required": ["slug"]
+}

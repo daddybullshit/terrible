@@ -5,6 +5,7 @@ const { createLogger } = require('./logger');
 const { loadStack } = require('./stack_loader');
 const { loadTemplates, renderTemplate, resolveOutputPath } = require('./template_utils');
 const { mapLikeToObject } = require('./object_utils');
+const { parentsFor } = require('./template_resolution');
 const { validateStack } = require('./validation');
 const { createIssueCollector } = require('./issue_collector');
 
@@ -29,6 +30,37 @@ function fmt(text, color) {
 
 function step(label) {
   return fmt(label, 'bold');
+}
+
+// Build a DAG-style view of class inheritance, respecting declared parent order.
+function buildClassHierarchy(resolvedClasses) {
+  const names = Array.from(resolvedClasses.keys());
+  const parentMap = new Map();
+  const childMap = new Map();
+
+  names.forEach(name => {
+    const def = resolvedClasses.get(name) || {};
+    const parents = parentsFor(def);
+    parentMap.set(name, parents);
+    parents.forEach(parent => {
+      if (!childMap.has(parent)) {
+        childMap.set(parent, new Set());
+      }
+      childMap.get(parent).add(name);
+    });
+  });
+
+  const roots = names.filter(name => parentMap.get(name).length === 0).sort();
+
+  function buildNode(name, seen = new Set()) {
+    const parents = parentMap.get(name) || [];
+    const cycle = seen.has(name);
+    const nextSeen = new Set(seen).add(name);
+    const children = Array.from(childMap.get(name) || []).sort().map(child => buildNode(child, nextSeen));
+    return { class: name, parents, children, cycle };
+  }
+
+  return roots.map(root => buildNode(root));
 }
 
 // Load a .env file into process.env (best-effort; stays silent if missing).
@@ -87,7 +119,7 @@ function resolveDefaultsDir(defaultsDirInput) {
 
 // Render a template for a single build entry and write outputs (including nested file helper outputs).
 function writeTemplate(templateKey, filename, templates, buildDir, obj, stackById, log, seenOutputs, options = {}) {
-  const { failOnCollisions = false, collisionState } = options;
+  const { failOnCollisions = false, collisionState, canonical } = options;
   const collision = (message) => {
     if (failOnCollisions) {
       if (collisionState) collisionState.fatal = true;
@@ -115,7 +147,7 @@ function writeTemplate(templateKey, filename, templates, buildDir, obj, stackByI
     obj,
     stackById,
     log,
-    { buildDir, outputs }
+    { buildDir, outputs, canonical }
   );
   if (seenOutputs) {
     if (seenOutputs.has(outPath)) {
@@ -233,6 +265,7 @@ function runBuild(options) {
       },
       global,
       classes: mapLikeToObject(resolvedClasses),
+      classHierarchy: buildClassHierarchy(resolvedClasses),
       instances: stackObjects.filter(obj => obj && obj.id && !isReservedId(obj.id)),
       stackById: mapLikeToObject(stackById)
     };
@@ -260,11 +293,12 @@ function runBuild(options) {
         fs.writeFileSync(path.join(classDefsDir, `${name}.json`), JSON.stringify(def, null, 2));
         classDefCount += 1;
       }
-      if (def && def.schema) {
+      if (def) {
         if (classSchemaCount === 0) {
           fs.mkdirSync(classSchemasDir, { recursive: true });
         }
-        fs.writeFileSync(path.join(classSchemasDir, `${name}.schema.json`), JSON.stringify(def.schema, null, 2));
+        const schemaContent = def.schema ? def.schema : {};
+        fs.writeFileSync(path.join(classSchemasDir, `${name}.schema.json`), JSON.stringify(schemaContent, null, 2));
         classSchemaCount += 1;
       }
     });
@@ -349,13 +383,13 @@ function runBuild(options) {
           if (typeof buildItem === 'string') {
             const ext = path.extname(buildItem);
             const filename = obj.id + ext;
-            writeTemplate(buildItem, filename, templates, buildDir, obj, stackById, log, outputPaths, { failOnCollisions, collisionState });
+            writeTemplate(buildItem, filename, templates, buildDir, obj, stackById, log, outputPaths, { failOnCollisions, collisionState, canonical });
             renderedCount += 1;
             return;
           }
           if (typeof buildItem === 'object' && buildItem !== null) {
             Object.entries(buildItem).forEach(([templateKey, filename]) => {
-              writeTemplate(templateKey, filename, templates, buildDir, obj, stackById, log, outputPaths, { failOnCollisions, collisionState });
+              writeTemplate(templateKey, filename, templates, buildDir, obj, stackById, log, outputPaths, { failOnCollisions, collisionState, canonical });
               renderedCount += 1;
             });
             return;
@@ -373,6 +407,7 @@ function runBuild(options) {
       console.log(`${step('Step 5/5')} ${fmt('Complete', 'cyan')}`);
       console.log(`  • rendered: ${fmt(renderedCount, 'green')} outputs`);
       console.log(`  • canonical: ${fmt(path.join(buildDir, 'canonical.json'), 'dim')}`);
+      console.log(`${fmt('Build succeeded', 'green')}`);
     }
   } catch (e) {
     log.error(e.message);

@@ -2,11 +2,11 @@ const path = require('path');
 const { deepMerge, mergeValue } = require('./merge_utils');
 const { findJsonFiles, readJsonFile } = require('./fs_utils');
 
-// Load class definitions and optional external schemas from a directory.
+// Load class definitions and schemas into raw entries with provenance.
 // Supports:
 //   - <name>.json          -> class definition (must include "class")
 //   - <name>.schema.json   -> schema file (may omit "class"; derived from filename)
-function loadClassFiles(dirPath, log) {
+function loadRawClassEntries(dirPath, log, sourceLabel) {
   let classFiles = [];
   try {
     classFiles = findJsonFiles(dirPath);
@@ -26,50 +26,138 @@ function loadClassFiles(dirPath, log) {
           log.warn(`Schema file ${filePath} could not determine class name; expected filename <class>.schema.json or "class" field.`);
           return null;
         }
-        return { type: 'schema', class: className, schema: data };
+        return { type: 'schema', class: className, schema: data, __file: filePath, __source: sourceLabel || 'unknown' };
       }
 
       if (!data.class || typeof data.class !== 'string') {
         log.warn(`Class definition ${filePath} is missing required string field 'class'; skipping`);
         return null;
       }
-      return { ...data };
+      if (data.schema !== undefined) {
+        throw new Error(`Class definition ${filePath} must not contain a 'schema' key; use a separate .schema.json file.`);
+      }
+      return { type: 'class', class: data.class, data, __file: filePath, __source: sourceLabel || 'unknown' };
     })
     .filter(Boolean);
 }
 
+function normalizeParents(def, log) {
+  if (!def || typeof def !== 'object') {
+    return def;
+  }
+  const add = (list, val) => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach(v => add(list, v));
+      return;
+    }
+    const key = String(val);
+    if (!list.includes(key)) {
+      list.push(key);
+    }
+  };
+
+  const parents = [];
+  add(parents, def.parent);
+  add(parents, def.parents);
+
+  const next = { ...def };
+  if (parents.length > 0) {
+    next.parent = parents;
+  } else {
+    delete next.parent;
+  }
+  if (next.parents !== undefined) {
+    delete next.parents;
+  }
+  if (!Array.isArray(next.parent) && next.parent !== undefined) {
+    log && log.warn && log.warn(`Normalized parent for class '${def.class || 'unknown'}' to array form.`);
+    next.parent = parents;
+  }
+  return next;
+}
+
+function stripInternalFields(def) {
+  if (!def || typeof def !== 'object') {
+    return def;
+  }
+  const next = { ...def };
+  delete next.__file;
+  delete next.__source;
+  return next;
+}
+
 // Merge class definitions with stack definitions overriding defaults.
 function mergeClassDefinitions(defaultsDir, stackDir, log) {
-  const classDefs = [
-    ...loadClassFiles(defaultsDir, log),
-    ...loadClassFiles(stackDir, log)
-  ];
+  const rawEntries = [
+    ...loadRawClassEntries(defaultsDir, log, 'defaults'),
+    ...loadRawClassEntries(stackDir, log, 'stack')
+  ].sort((a, b) => {
+    const sourceOrder = { defaults: 0, stack: 1 };
+    const aSrc = sourceOrder[a.__source] ?? 99;
+    const bSrc = sourceOrder[b.__source] ?? 99;
+    if (aSrc !== bSrc) return aSrc - bSrc;
+    const aFile = a.__file || '';
+    const bFile = b.__file || '';
+    return aFile.localeCompare(bFile);
+  });
 
   const classMap = new Map();
-  classDefs.forEach(def => {
-    const existing = classMap.get(def.class);
+  rawEntries.forEach(entry => {
+    const existing = classMap.get(entry.class);
 
-    // Merge standalone schema files into the class definition.
-    if (def.type === 'schema') {
-      const next = existing ? { ...existing } : { class: def.class };
-      next.schema = next.schema ? deepMerge(next.schema, def.schema) : def.schema;
-      classMap.set(def.class, next);
+    if (entry.type === 'schema') {
+      const next = existing ? { ...existing } : { class: entry.class };
+      next.schema = next.schema ? deepMerge(next.schema, entry.schema) : entry.schema;
+      next.__source = entry.__source || next.__source;
+      next.__file = entry.__file || next.__file;
+      classMap.set(entry.class, next);
       return;
     }
 
-    const merged = existing ? deepMerge(existing, def) : def;
-    classMap.set(def.class, merged);
+    if (entry.type === 'class') {
+      const merged = existing ? deepMerge(existing, entry.data) : entry.data;
+      classMap.set(entry.class, merged);
+    }
   });
+
+  // Normalize parent/parents to a single ordered array form for determinism.
+  classMap.forEach((def, name) => {
+    classMap.set(name, stripInternalFields(normalizeParents(def, log)));
+  });
+
   return classMap;
 }
 
+function parentsFor(def) {
+  if (!def || typeof def !== 'object') {
+    return [];
+  }
+  const out = [];
+  const add = val => {
+    if (!val) return;
+    if (Array.isArray(val)) {
+      val.forEach(add);
+      return;
+    }
+    const key = String(val);
+    if (!out.includes(key)) {
+      out.push(key);
+    }
+  };
+  add(def.parent);
+  add(def.parents);
+  return out;
+}
+
 // Recursively resolve inheritance for a class, caching results.
-function resolveClass(name, classMap, memo, stack, log) {
+function resolveClass(name, classMap, memo, stack, path, log) {
   if (memo.has(name)) {
     return memo.get(name);
   }
   if (stack.has(name)) {
-    throw new Error(`Detected circular class inheritance involving '${name}'.`);
+    const cyclePath = [...path, name].join(' -> ');
+    throw new Error(`Detected circular class inheritance: ${cyclePath}`);
   }
 
   const def = classMap.get(name);
@@ -78,16 +166,22 @@ function resolveClass(name, classMap, memo, stack, log) {
   }
 
   stack.add(name);
+  const nextPath = [...path, name];
   let resolved = {};
-  if (def.parent) {
-    const parentResolved = resolveClass(def.parent, classMap, memo, stack, log);
+  const parentList = parentsFor(def);
+  parentList.forEach(parentName => {
+    if (nextPath.includes(parentName)) {
+      const cyclePath = [...nextPath, parentName].join(' -> ');
+      throw new Error(`Detected circular class inheritance: ${cyclePath}`);
+    }
+    const parentResolved = resolveClass(parentName, classMap, memo, stack, nextPath, log);
     if (!parentResolved && log) {
-      log.warn(`Class '${name}' references unknown parent '${def.parent}'.`);
+      log.warn(`Class '${name}' references unknown parent '${parentName}'.`);
     }
     if (parentResolved) {
       resolved = deepMerge(resolved, parentResolved);
     }
-  }
+  });
   resolved = deepMerge(resolved, def);
   memo.set(name, resolved);
   stack.delete(name);
@@ -98,7 +192,7 @@ function resolveClass(name, classMap, memo, stack, log) {
 function resolveClasses(classMap, log) {
   const memo = new Map();
   Array.from(classMap.keys()).forEach(name => {
-    resolveClass(name, classMap, memo, new Set(), log);
+    resolveClass(name, classMap, memo, new Set(), [], log);
   });
   return memo;
 }

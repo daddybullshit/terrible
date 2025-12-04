@@ -1,3 +1,5 @@
+const { deepMerge } = require('./merge_utils');
+
 // Retrieve per-render metadata injected by the renderer.
 function metaFromOptions(options) {
   return options && options.data && options.data._terrible
@@ -81,23 +83,57 @@ function getByPath(obj, pathStr) {
   return pathStr.split('.').reduce((acc, key) => (acc && acc[key] !== undefined ? acc[key] : undefined), obj);
 }
 
+// Normalize parent/parents fields to an ordered, de-duplicated array.
+function parentsFor(def) {
+  if (!def || typeof def !== 'object') {
+    return [];
+  }
+  const out = [];
+  const add = val => {
+    if (!val) return;
+    const key = String(val);
+    if (!out.includes(key)) {
+      out.push(key);
+    }
+  };
+  if (Array.isArray(def.parent)) {
+    def.parent.forEach(add);
+  } else if (def.parent) {
+    add(def.parent);
+  }
+  if (Array.isArray(def.parents)) {
+    def.parents.forEach(add);
+  }
+  return out;
+}
+
 // Check whether a class inherits (directly or indirectly) from a target.
+// Supports multiple parents (parent as array) while preserving declared order.
 function classInheritsFrom(className, targetName, classesObj) {
   if (!className || !targetName || !classesObj) {
     return false;
   }
-  let current = className;
+  const stack = [className];
   const seen = new Set();
-  while (current && !seen.has(current)) {
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current || seen.has(current)) continue;
     if (current === targetName) {
       return true;
     }
     seen.add(current);
     const def = classesObj[current];
-    current = def && typeof def === 'object' ? def.parent : undefined;
+    const parents = parentsFor(def);
+    // Push in reverse so left-to-right order is respected when popping.
+    for (let i = parents.length - 1; i >= 0; i -= 1) {
+      stack.push(parents[i]);
+    }
   }
   return false;
 }
+
+// Backward compatible alias kept for existing callers.
+const classInheritsFromMulti = classInheritsFrom;
 
 // Convert any list-like value to an array (Map, object, array).
 function toArray(value) {
@@ -158,8 +194,135 @@ function targetIncludes(target, needle) {
   return false;
 }
 
+// Merge schemas across a class inheritance chain (including multi-parent).
+function mergedSchemaFor(className, classesObj) {
+  if (!className || !classesObj || !classesObj[className]) {
+    return null;
+  }
+  const seen = new Set();
+  const order = [];
+  const stack = [className];
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current || seen.has(current)) continue;
+    seen.add(current);
+    order.unshift(current); // reverse traversal: parents applied before children
+    const def = classesObj[current];
+    if (!def || typeof def !== 'object') continue;
+    const parents = [];
+    if (Array.isArray(def.parent)) parents.push(...def.parent);
+    else if (def.parent) parents.push(def.parent);
+    if (Array.isArray(def.parents)) parents.push(...def.parents);
+    parents.reverse().forEach(p => stack.push(p));
+  }
+
+  return order.reduce((acc, name) => {
+    const def = classesObj[name];
+    if (!def || !def.schema) {
+      return acc;
+    }
+    return deepMerge(acc, def.schema);
+  }, {});
+}
+
+// Find the class that last defined a property in schema merge order.
+function schemaPropertySource(className, prop, classesObj) {
+  if (!className || !prop || !classesObj || !classesObj[className]) {
+    return null;
+  }
+  const lineage = classLineage(className, classesObj);
+  for (let i = 0; i < lineage.length; i += 1) {
+    const name = lineage[i];
+    const def = classesObj[name];
+    const props = def && def.schema && def.schema.properties;
+    if (props && Object.prototype.hasOwnProperty.call(props, prop)) {
+      return name;
+    }
+  }
+  return null;
+}
+
+// Check if a property is required for a class (considering inherited schema).
+function schemaRequires(className, prop, classesObj) {
+  if (!className || !prop || !classesObj) return false;
+  const merged = mergedSchemaFor(className, classesObj);
+  const required = Array.isArray(merged && merged.required) ? merged.required : [];
+  return required.includes(prop);
+}
+
+// Check if a property exists in schema (including inherited).
+function schemaHasProp(className, prop, classesObj) {
+  if (!className || !prop || !classesObj) return false;
+  const merged = mergedSchemaFor(className, classesObj);
+  const props = merged && merged.properties && typeof merged.properties === 'object'
+    ? merged.properties
+    : {};
+  return Object.prototype.hasOwnProperty.call(props, prop);
+}
+
+// Collect flattened schema properties (inherited).
+function schemaProperties(className, classesObj) {
+  const merged = mergedSchemaFor(className, classesObj);
+  if (!merged || !merged.properties || typeof merged.properties !== 'object') {
+    return {};
+  }
+  return merged.properties;
+}
+
+// Return lineage from root(s) to class (ordered, deduped).
+function classLineage(className, classesObj) {
+  if (!className || !classesObj || !classesObj[className]) return [];
+  const result = [];
+  const seen = new Set();
+  function walk(name) {
+    if (!name || seen.has(name)) return;
+    const def = classesObj[name];
+    if (!def || typeof def !== 'object') return;
+    const parents = [];
+    if (Array.isArray(def.parent)) parents.push(...def.parent);
+    else if (def.parent) parents.push(def.parent);
+    if (Array.isArray(def.parents)) parents.push(...def.parents);
+    parents.forEach(walk);
+    result.push(name);
+    seen.add(name);
+  }
+  walk(className);
+  return result;
+}
+
+// Group required fields by the class that defined them, ordered by lineage.
+function requiredFieldsBySource(className, classesObj) {
+  if (!className || !classesObj) return [];
+  const lineage = classLineage(className, classesObj); // parents first
+  const merged = mergedSchemaFor(className, classesObj) || {};
+  const mergedProps = merged.properties && typeof merged.properties === 'object' ? merged.properties : {};
+  const required = Array.isArray(merged.required) ? merged.required : [];
+  const groups = new Map();
+  lineage.forEach(cls => groups.set(cls, []));
+
+  const seen = new Set();
+  required.forEach(prop => {
+    if (seen.has(prop)) return;
+    seen.add(prop);
+    if (!Object.prototype.hasOwnProperty.call(mergedProps, prop)) return;
+    const source = schemaPropertySource(className, prop, classesObj) || lineage[lineage.length - 1];
+    if (!groups.has(source)) {
+      groups.set(source, []);
+    }
+    groups.get(source).push(prop);
+  });
+
+  return lineage
+    .slice()
+    .reverse()
+    .map(cls => ({ class: cls, fields: groups.get(cls) || [] }))
+    .filter(entry => entry.fields.length > 0);
+}
+
 module.exports = {
   classInheritsFrom,
+  classInheritsFromMulti,
+  parentsFor,
   entriesFrom,
   filterEntriesByInheritance,
   filterList,
@@ -168,5 +331,12 @@ module.exports = {
   metaFromOptions,
   resolveTagValue,
   targetIncludes,
-  toArray
+  toArray,
+  mergedSchemaFor,
+  schemaRequires,
+  schemaHasProp,
+  schemaProperties,
+  schemaPropertySource,
+  classLineage,
+  requiredFieldsBySource
 };

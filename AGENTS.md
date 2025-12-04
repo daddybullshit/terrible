@@ -20,6 +20,7 @@
 - Templates: use `{{ key }}` or `{{ key|default }}` placeholders (word characters only). Values resolve from merged object definitions (defaults overridden by stack files), then `global` (from defaults plus stack), then environment variables. Cross-object lookups use `{{otherId.field}}`. Helpers such as `values`, `group_by`, `sort_by`, `filter_inherits`, `where`, `where_includes*`, `includes_any/all`, `default_list`, `compact`, `uniq`, `slugify`, and `title_case` provide flexible search/filter support instead of reserved tag objects. Helper names are `snake_case`; implementation code remains `camelCase`.
 - `global` is the shared object for workspace-wide values and drives placeholder resolution; its `objects` map lists every non-reserved stack object (id, class, resolved properties) for templates/diagnostics. There is no field normalization or class-level field injection—fields such as `tags` are plain user data.
 - Output paths must remain within the build root; reject or warn on unsafe segments such as `..`.
+- Keep `CHANGELOG.md` up to date for any user-facing change; PRs should include changelog entries alongside doc updates.
 
 ## Testing Expectations
 - No automated test suite is present. When changing build logic, run `./js/build.js -s <stack>` and validate the generated structure and contents.

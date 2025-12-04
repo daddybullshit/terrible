@@ -19,4 +19,4 @@ Templates
 - templates/summary.txt.hbs: text summary generated from global.
 
 Build
-Run `./bin/terrible build terrible/stacks/validation-suite --warn-extra-fields` to see warnings; add `--warnings-as-errors` to make them fatal.
+Run `./bin/terrible build stacks/validation-suite --warn-extra-fields` to see warnings; add `--warnings-as-errors` to make them fatal. Schemas live in sidecar `.schema.json` files and are merged/inherited deterministically.

@@ -3,8 +3,8 @@
 This roadmap summarizes the planned evolution of the build system and template tooling for public consumption. Detailed working notes and internal design discussions are maintained separately.
 
 ## Current State
-- Deterministic loader and renderer: depth-first then alphabetical merge, class inheritance, and canonical export to `build/<stack>-<hash>/canonical.json` with metadata attached to `global`.
-- Validation: embedded class schemas validated via Ajv; results land in `build/<hash>/meta/validation.json`; merged class definitions/schemas are exported under `build/<hash>/meta/`. `--warnings-as-errors` flips warnings to fatal; `--quiet` suppresses printed info/warnings (errors still print).
+- Deterministic loader and renderer: depth-first then alphabetical merge, multi-parent class inheritance (with cycle detection), and canonical export to `build/<stack>-<hash>/canonical.json` with metadata attached to `global`.
+- Validation: class schemas live in sidecar `<class>.schema.json` files (embedded schemas are rejected), merge deterministically, and validate via Ajv. Results land in `build/<hash>/meta/validation.json`; merged class definitions/schemas are exported under `build/<hash>/meta/`. `--warnings-as-errors` flips warnings to fatal; `--quiet` suppresses printed info/warnings (errors still print).
 - `global` supports `build` entries, drives placeholder resolution, and exposes `global.objects` (keyed map) for templates; helpers such as `values`, `group_by`, `sort_by`, `where`, `where_includes*`, `includes_any/all`, `default_list`, `compact`, `uniq`, `slugify`, and `title_case` handle ordering or aggregation without reserved tag objects.
 - Defaults are intentionally minimal; stacks are expected to be self-contained, with `-d` allowing an alternate defaults path.
 - Tags are plain user data: no normalization or class-level injection; objects own their `tags` (or any other fields) directly.
