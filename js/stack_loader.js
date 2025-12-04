@@ -129,81 +129,82 @@ function loadStackFiles(dirPath, { required, log }) {
   return stackFiles.map(file => readStackObject(file, log));
 }
 
-// Split out a single global object while preserving others.
-function extractGlobals(objs = []) {
-  let globalObj = null;
-  const rest = [];
-
-  objs.forEach(obj => {
-    if (!globalObj && obj && obj.id === 'global') {
-      globalObj = obj;
-      return;
+// First pass: load/merge classes + schemas deterministically from ordered roots.
+function loadClassesAndSchemas(classDirs, log) {
+  const roots = Array.isArray(classDirs) ? classDirs : [classDirs];
+  roots.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      throw new Error(`Classes directory does not exist: ${dir}`);
     }
-    rest.push(obj);
   });
-
-  return { globalObj, rest };
+  const { resolvedClasses } = loadResolvedClasses(roots, log);
+  return resolvedClasses;
 }
 
-// Merge default and stack globals, allowing overrides from both.
-function loadMergedGlobals(defaultsDir, defaultsObjs, stackObjs, log) {
-  const globalsPaths = [
-    path.join(defaultsDir, 'global.json')
-  ];
-
-  let merged = { id: 'global', build: [] };
-  globalsPaths.forEach(filePath => {
-    if (!fs.existsSync(filePath)) {
-      return;
-    }
-    try {
-      const data = readJsonFile(filePath);
-      merged = deepMerge(merged, data);
-    } catch (err) {
-      log.error(`Failed to parse ${filePath}: ${err.message}`);
-    }
-  });
-
-  const { globalObj: defaultsGlobals, rest: defaultsRest } = extractGlobals(defaultsObjs);
-  const { globalObj: stackGlobals, rest: stackRest } = extractGlobals(stackObjs);
-  [defaultsGlobals, stackGlobals].forEach(obj => {
-    if (obj) {
-      merged = deepMerge(merged, obj);
-    }
-  });
-
-  return { globals: merged, defaultsRest, stackRest };
-}
-
-// Load, merge, and class-resolve stack instances; attach metadata.
-function loadStack(stackDir, defaultsDir, log, options = {}) {
-  const { issues } = options;
-  if (!fs.existsSync(stackDir)) {
-    throw new Error(`Stack directory does not exist: ${stackDir}`);
+// Second pass: load/merge instances/global using resolved classes.
+function loadInstances({ instanceDirs, resolvedClasses, log, issues }) {
+  const roots = Array.isArray(instanceDirs) ? instanceDirs : [instanceDirs];
+  if (!roots.length) {
+    throw new Error('At least one instances root is required.');
   }
 
-  const defaultsInstancesDir = path.join(defaultsDir, 'instances');
-  const stackInstancesDir = path.join(stackDir, 'instances');
+  const missingRoots = roots.filter(dir => !fs.existsSync(dir));
+  if (missingRoots.length) {
+    throw new Error(`Instances directory does not exist: ${missingRoots.join(', ')}`);
+  }
+
   const merged = new Map();
-  const { resolvedClasses } = loadResolvedClasses(stackDir, defaultsDir, log);
+  let mergedGlobals = { id: 'global', build: [] };
+  const emptyRoots = [];
+  let anyContent = false;
 
-  const defaultStacks = loadStackFiles(defaultsInstancesDir, { required: false, log });
-  const stackInstanceStacks = loadStackFiles(stackInstancesDir, { required: true, log });
+  roots.forEach(root => {
+    const globalPath = path.join(root, 'global.json');
+    const instancesDir = path.join(root, 'instances');
+    const files = loadStackFiles(instancesDir, { required: false, log });
+    const hasGlobal = fs.existsSync(globalPath);
+    const hasInstances = files.length > 0;
 
-  const { globals, defaultsRest, stackRest } = loadMergedGlobals(defaultsDir, defaultStacks, stackInstanceStacks, log);
-  const upsert = obj => {
-    if (merged.has(obj.id)) {
-      const mergedObj = deepMerge(merged.get(obj.id), obj);
-      mergedObj.id = obj.id;
-      merged.set(obj.id, mergedObj);
-    } else {
-      merged.set(obj.id, obj);
+    if (!hasGlobal && !hasInstances) {
+      emptyRoots.push(root);
+      return;
     }
-  };
 
-  merged.set('global', globals);
-  defaultsRest.forEach(upsert);
-  stackRest.forEach(upsert);
+    anyContent = true;
+
+    if (hasGlobal) {
+      try {
+        const data = readJsonFile(globalPath);
+        mergedGlobals = deepMerge(mergedGlobals, data);
+      } catch (err) {
+        log.error(`Failed to parse ${globalPath}: ${err.message}`);
+      }
+    }
+
+    files.forEach(obj => {
+      if (obj.id === 'global') {
+        mergedGlobals = deepMerge(mergedGlobals, obj);
+        return;
+      }
+      if (merged.has(obj.id)) {
+        const mergedObj = deepMerge(merged.get(obj.id), obj);
+        mergedObj.id = obj.id;
+        merged.set(obj.id, mergedObj);
+      } else {
+        merged.set(obj.id, obj);
+      }
+    });
+  });
+
+  if (emptyRoots.length) {
+    throw new Error(`No instance or global files found in ${emptyRoots.join(', ')}`);
+  }
+
+  if (!anyContent) {
+    throw new Error(`No instance or global files found in ${roots.join(', ')}`);
+  }
+
+  merged.set('global', mergedGlobals);
 
   const stackObjects = Array.from(merged.values());
   stackObjects.forEach(obj => applyClassDefaults(obj, resolvedClasses, log, issues));
@@ -212,8 +213,33 @@ function loadStack(stackDir, defaultsDir, log, options = {}) {
   return {
     stackObjects: Array.from(withMetadata.values()),
     stackById: withMetadata,
+    global: mergedGlobals
+  };
+}
+
+// Load, merge, and resolve stack data from ordered stack/class/instance roots.
+function loadStack({ stackDirs, classDirs, instanceDirs, log, issues }) {
+  const stacks = Array.isArray(stackDirs) ? stackDirs : [stackDirs];
+  if (!stacks.length) {
+    throw new Error('At least one stack directory is required.');
+  }
+  stacks.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      throw new Error(`Stack directory does not exist: ${dir}`);
+    }
+  });
+
+  const classRoots = Array.isArray(classDirs) && classDirs.length ? classDirs : stacks;
+  const instanceRoots = Array.isArray(instanceDirs) && instanceDirs.length ? instanceDirs : stacks;
+
+  const resolvedClasses = loadClassesAndSchemas(classRoots, log);
+  const { stackObjects, stackById, global } = loadInstances({ instanceDirs: instanceRoots, resolvedClasses, log, issues });
+
+  return {
+    stackObjects,
+    stackById,
     resolvedClasses,
-    global: globals
+    global
   };
 }
 

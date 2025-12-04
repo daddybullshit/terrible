@@ -4,7 +4,7 @@ Terrible validates instances against their class schemas after merging defaults 
 
 ## Schemas
 - Each class may define a sidecar `<class>.schema.json`. Embedded schemas inside class JSON are disallowed; missing sidecars are treated as empty schemas and emitted to `meta/class-schemas/`.
-- Schemas merge in the same deterministic order as class data. Multi-parent inheritance merges parent schemas first, then the child.
+- Schemas merge in the same deterministic order as class data and stack order. Multi-parent inheritance merges parent schemas first, then the child.
 - `global.class_schemas` (written under `build/<stack>-<hash>/meta/`) captures the effective schema per class for downstream consumers.
 
 ## Validation behavior

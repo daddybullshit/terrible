@@ -1,11 +1,15 @@
 # Data model and stack layout
 
-Terrible treats every build as a **stack**: a pair of recursive directories (defaults and stack) that contain JSON classes, instances, and templates. Everything is merged into a single canonical object before rendering.
+Terrible treats every build as a **stack set**: an ordered list of stack directories that contain JSON classes, instances, and templates. Everything is merged into a single canonical object before rendering.
 
 ## Directories and load order
-- **Defaults**: optional baseline content under `defaults/classes/`, `defaults/instances/`, `defaults/templates/`, plus `defaults/global.json`.
-- **Stack**: required content under `<stack>/classes/`, `<stack>/instances/`, `<stack>/templates/`, plus optional `<stack>/global.json`.
-- All `.json` files load recursively, depth-first then alphabetically. Stack files override defaults. Files with the same `id` deep-merge, with deeper paths winning.
+- **Stacks**: each stack may include `classes/`, `instances/`, `templates/`, and optional `global.json`. You must supply at least one stack via the CLI; later stacks override earlier ones (order is exactly what you pass).
+- Ordering rules (strict/deterministic):
+  - Stack order is exactly the CLI order; no alphabetical resorting.
+  - Within each stack: files load recursively depth-first then alphabetically.
+  - Classes/schemas merge first across the ordered stack list; parents are ordered as declared; schemas merge in the same order.
+  - Instances/global merge second across the ordered stack list; for the same `id`, later stacks override earlier ones; nested objects deep-merge; arrays append unless `$reset` is used.
+  - Build outputs: default build directory names derive from the ordered stack list (`<stack>-<hash>` or `stackset-<hash>`); flags allow overriding name/root (`--build-root`, `--build-name`, `--build-dir`, `--hash/--no-hash`).
 
 ## Instances and `global`
 - Each instance file must include an `id`; files without an `id` are merged into the reserved `global` object.
@@ -20,7 +24,7 @@ Terrible treats every build as a **stack**: a pair of recursive directories (def
 
 ## Schemas
 - Each class may provide a sidecar `<class>.schema.json`. Embedded schemas inside class JSON are disallowed; missing sidecars are replaced with an empty schema during the build.
-- Schemas merge in the same deterministic order as class data. Effective schemas for every class are written to `build/<stack>-<hash>/meta/class-schemas/`.
+- Schemas merge in the same deterministic order as class data and stack order. Effective schemas for every class are written to `build/<stack>-<hash>/meta/class-schemas/`.
 - Instances validate against their class schema. Enable `--warn-extra-fields` to surface fields not declared in the schema (respects `additionalProperties`).
 
 ## Naming and conventions

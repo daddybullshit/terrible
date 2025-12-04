@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { resolveStackDir, buildDirNameFromPath, stackHashFromPath } = require('./stack_paths');
+const { resolveStackDir, buildDirNameFromDirs, stackHashFromDirs } = require('./stack_paths');
 const { createLogger } = require('./logger');
 const { loadStack } = require('./stack_loader');
 const { loadTemplates, renderTemplate, resolveOutputPath } = require('./template_utils');
@@ -103,20 +103,6 @@ function isReservedId(id) {
 }
 
 // Resolve defaults dir relative to CWD, validating existence and type.
-function resolveDefaultsDir(defaultsDirInput) {
-  const base = defaultsDirInput || path.join(repoRoot, 'defaults');
-  const abs = path.isAbsolute(base) ? base : path.resolve(process.cwd(), base);
-  if (!fs.existsSync(abs)) {
-    return abs;
-  }
-  const real = fs.realpathSync(abs);
-  const stat = fs.statSync(real);
-  if (!stat.isDirectory()) {
-    throw new Error(`Defaults path is not a directory: ${defaultsDirInput || base}`);
-  }
-  return real;
-}
-
 // Render a template for a single build entry and write outputs (including nested file helper outputs).
 function writeTemplate(templateKey, filename, templates, buildDir, obj, stackById, log, seenOutputs, options = {}) {
   const { failOnCollisions = false, collisionState, canonical } = options;
@@ -193,8 +179,13 @@ function cleanBuildDir(buildDir, buildRoot) {
 // explicitly coordinating a hook/breaking change.
 function runBuild(options) {
   const {
-    stackDir: stackDirInput,
-    defaultsDir: defaultsDirInput,
+    stackDirs: stackDirInputs,
+    classDirs: classDirInputs,
+    instanceDirs: instanceDirInputs,
+    buildRoot: buildRootInput,
+    buildDir: buildDirInput,
+    buildName: buildNameInput,
+    includeHash = true,
     warningsAsErrors = false,
     warnExtraFields = false,
     failOnCollisions = false,
@@ -203,39 +194,51 @@ function runBuild(options) {
 
   loadEnv(path.join(repoRoot, '.env'));
   const log = createLogger({ quiet });
-  let stackDir;
-  let defaultsDir;
+    const stackDirs = (Array.isArray(stackDirInputs) ? stackDirInputs : [stackDirInputs])
+    .filter(Boolean)
+    .map(stackPath => {
+      const abs = path.isAbsolute(stackPath) ? stackPath : path.resolve(process.cwd(), stackPath);
+      return resolveStackDir(abs);
+    });
+  const classDirs = (Array.isArray(classDirInputs) && classDirInputs.length ? classDirInputs : stackDirs).map(dir => path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir));
+  const instanceDirs = (Array.isArray(instanceDirInputs) && instanceDirInputs.length ? instanceDirInputs : stackDirs).map(dir => path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir));
 
-  try {
-    const stackPath = path.isAbsolute(stackDirInput) ? stackDirInput : path.resolve(process.cwd(), stackDirInput);
-    stackDir = resolveStackDir(stackPath);
-    defaultsDir = resolveDefaultsDir(defaultsDirInput);
-  } catch (err) {
-    console.error(err.message);
+  if (!stackDirs.length) {
+    console.error('At least one --stack is required.');
     process.exit(1);
   }
 
-  const buildRoot = path.join(repoRoot, 'build');
-  const buildDir = path.join(buildRoot, buildDirNameFromPath(stackDir));
+  const buildRoot = buildDirInput
+    ? (path.isAbsolute(buildDirInput) ? path.dirname(buildDirInput) : path.resolve(process.cwd(), path.dirname(buildDirInput)))
+    : (buildRootInput ? (path.isAbsolute(buildRootInput) ? buildRootInput : path.resolve(process.cwd(), buildRootInput)) : path.join(repoRoot, 'build'));
+
+  let buildDir;
+  if (buildDirInput) {
+    buildDir = path.isAbsolute(buildDirInput) ? buildDirInput : path.join(buildRoot, buildDirInput);
+  } else {
+    const name = buildNameInput
+      ? String(buildNameInput)
+      : buildDirNameFromDirs(stackDirs, { includeHash });
+    buildDir = path.join(buildRoot, name);
+  }
 
   try {
     if (!quiet) {
       console.log(`${step('Step 1/5')} ${fmt('Templates', 'cyan')}`);
-      console.log(`  • defaults: ${fmt(path.join(defaultsDir, 'templates'), 'dim')}`);
-      console.log(`  • stack:    ${fmt(path.join(stackDir, 'templates'), 'dim')}`);
+      stackDirs.forEach((dir, idx) => console.log(`  ${fmt(`${idx + 1}.`, 'dim')} stack:    ${fmt(path.join(dir, 'templates'), 'dim')}`));
     }
-    const { templates, stats: templateStats } = loadTemplates(stackDir, defaultsDir, log);
+    const { templates, stats: templateStats } = loadTemplates(stackDirs, log);
     if (!quiet) {
-      console.log(`  • loaded ${fmt(templateStats.totalCount, 'green')} (defaults ${templateStats.defaultsCount}, stack ${templateStats.stackCount}, overrides ${templateStats.overrideCount})`);
+      console.log(`  • loaded ${fmt(templateStats.totalCount, 'green')} (overrides ${templateStats.overrideCount})`);
     }
 
     if (!quiet) {
       console.log(`${step('Step 2/5')} ${fmt('Stack data', 'cyan')}`);
-      console.log(`  • defaults: ${fmt(defaultsDir, 'dim')}`);
-      console.log(`  • stack:    ${fmt(stackDir, 'dim')}`);
+      classDirs.forEach((dir, idx) => console.log(`  ${fmt(`${idx + 1}.`, 'dim')} classes:  ${fmt(path.join(dir, 'classes'), 'dim')}`));
+      instanceDirs.forEach((dir, idx) => console.log(`  ${fmt(`${idx + 1}.`, 'dim')} instances:${fmt(path.join(dir, 'instances'), 'dim')}`));
     }
     const issues = createIssueCollector({ log, warningsAsErrors });
-    const { stackObjects, stackById, resolvedClasses, global } = loadStack(stackDir, defaultsDir, log, { issues });
+    const { stackObjects, stackById, resolvedClasses, global } = loadStack({ stackDirs, classDirs, instanceDirs, log, issues });
     const stack = stackObjects;
     const instanceCount = stackObjects.filter(obj => obj && obj.id && !isReservedId(obj.id)).length;
     if (!quiet) {
@@ -250,7 +253,7 @@ function runBuild(options) {
       console.log(`  • validation: ${fmt(warnCount, warnCount ? 'yellow' : 'dim')} warnings, ${fmt(errorCount, errorCount ? 'yellow' : 'dim')} errors`);
     }
 
-    const buildHash = stackHashFromPath(stackDir);
+    const buildHash = stackHashFromDirs(stackDirs);
     const buildItemCount = stack.reduce((sum, obj) => sum + (Array.isArray(obj.build) ? obj.build.length : 0), 0);
     const canonical = {
       canonicalVersion: CANONICAL_VERSION,
@@ -258,10 +261,15 @@ function runBuild(options) {
       breakingChangesWithoutVersionBump: true,
       buildMeta: {
         generatedAt: new Date().toISOString(),
-        stackDir,
-        defaultsDir,
+        stackDirs,
+        classDirs,
+        instanceDirs,
+        stackOrder: stackDirs,
+        classOrder: classDirs,
+        instanceOrder: instanceDirs,
         stackHash: buildHash,
-        buildDirName: path.basename(buildDir)
+        buildDirName: path.basename(buildDir),
+        buildRoot
       },
       global,
       classes: mapLikeToObject(resolvedClasses),

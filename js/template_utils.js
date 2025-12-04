@@ -31,41 +31,46 @@ function readTemplatesFromDir(baseDir) {
   }, {});
 }
 
-// Load templates from defaults and stack, warn on overrides, and return stats.
-function loadTemplates(stackDir, defaultsDir, log) {
-  const baseTemplatesDir = path.join(defaultsDir, 'templates');
-  const stackTemplatesDir = path.join(stackDir, 'templates');
-
-  const defaultsTemplates = readTemplatesFromDir(baseTemplatesDir);
-  const stackTemplates = readTemplatesFromDir(stackTemplatesDir);
+// Load templates from an ordered list of stack roots, warn on overrides, and return stats.
+function loadTemplates(stackDirs, log) {
+  const dirs = Array.isArray(stackDirs) ? stackDirs : [stackDirs];
+  const templates = {};
   const collisions = [];
+  const perDirCounts = [];
 
-  Object.keys(stackTemplates).forEach(key => {
-    if (Object.prototype.hasOwnProperty.call(defaultsTemplates, key)) {
-      collisions.push(key);
-    }
+  dirs.forEach((stackDir, index) => {
+    const tplDir = path.join(stackDir, 'templates');
+    const entries = readTemplatesFromDir(tplDir);
+    const keys = Object.keys(entries);
+    perDirCounts.push({ dir: tplDir, count: keys.length });
+
+    keys.forEach(key => {
+      if (Object.prototype.hasOwnProperty.call(templates, key)) {
+        collisions.push({ key, from: tplDir });
+      }
+      templates[key] = entries[key];
+    });
   });
 
   if (collisions.length && log && log.warn) {
-    collisions.sort((a, b) => a.localeCompare(b));
-    collisions.forEach(key => {
-      log.warn(`Template override: stack template '${key}' shadows defaults template of the same path.`);
-    });
+    collisions
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .forEach(({ key, from }) => {
+        log.warn(`Template override: '${key}' from ${from} shadows an earlier template of the same path.`);
+      });
   }
 
-  const templates = {
-    ...defaultsTemplates,
-    ...stackTemplates
-  };
-
   registerPartials(templates);
+  const totalCount = Object.keys(templates).length;
+  const overrideCount = collisions.length;
+  const stackCount = perDirCounts.reduce((sum, entry) => sum + entry.count, 0);
   return {
     templates,
     stats: {
-      defaultsCount: Object.keys(defaultsTemplates).length,
-      stackCount: Object.keys(stackTemplates).length,
-      overrideCount: collisions.length,
-      totalCount: Object.keys(templates).length
+      perDirCounts,
+      overrideCount,
+      totalCount,
+      stackCount
     }
   };
 }

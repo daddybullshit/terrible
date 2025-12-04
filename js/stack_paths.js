@@ -9,7 +9,7 @@ function normalizeStackDir(stackDirInput) {
   return normalizeDirPath(stackDirInput);
 }
 
-// Hash a stack path to produce a short, deterministic build dir suffix.
+// Hash a stack path (or identifier string) to produce a short, deterministic build dir suffix.
 function stackHashFromPath(stackDir) {
   return crypto.createHash('sha256')
     .update(stackDir)
@@ -18,8 +18,35 @@ function stackHashFromPath(stackDir) {
 }
 
 // Build directory name derived from stack path + hash.
-function buildDirNameFromPath(stackDir) {
-  return `${path.basename(stackDir)}-${stackHashFromPath(stackDir)}`;
+function buildDirNameFromPath(stackDir, { includeHash = true } = {}) {
+  const base = path.basename(stackDir);
+  if (!includeHash) {
+    return base;
+  }
+  return `${base}-${stackHashFromPath(stackDir)}`;
+}
+
+// Hash a stack set (array of dirs) deterministically.
+function stackHashFromDirs(stackDirs) {
+  const normalized = Array.isArray(stackDirs) ? stackDirs.map(normalizeStackDir) : [normalizeStackDir(String(stackDirs))];
+  return stackHashFromPath(normalized.join('|'));
+}
+
+// Build directory name for a stack set; use a short prefix when combining.
+function buildDirNameFromDirs(stackDirs, { includeHash = true } = {}) {
+  const dirs = Array.isArray(stackDirs) ? stackDirs : [stackDirs];
+  const baseNames = dirs.map(d => path.basename(normalizeStackDir(d)));
+  if (includeHash) {
+    const hash = stackHashFromDirs(dirs);
+    if (dirs.length === 1) {
+      return `${baseNames[0]}-${hash}`;
+    }
+    return `stackset-${hash}`;
+  }
+  if (dirs.length === 1) {
+    return baseNames[0];
+  }
+  return `stackset-${baseNames.join('+')}`;
 }
 
 function getStackHash(stackDirInput) {
@@ -69,5 +96,7 @@ module.exports = {
   getBuildDirName,
   resolveStackDir: normalizeStackDir,
   stackHashFromPath,
-  buildDirNameFromPath
+  buildDirNameFromPath,
+  stackHashFromDirs,
+  buildDirNameFromDirs
 };

@@ -1,10 +1,10 @@
 # Templates and helpers
 
-Templates are standard Handlebars files with a `resolve` helper that understands stack data. Every file under a `templates/` directory (defaults or stack) is treated as a template key, and stack files override defaults when the relative path matches.
+Templates are standard Handlebars files with a `resolve` helper that understands stack data. Every file under a `templates/` directory in any stack is treated as a template key; later stacks override earlier ones when the relative path matches.
 
 ## Discovery and overrides
-- Template roots: `defaults/templates/**` and `<stack>/templates/**`.
-- Any extension is allowed; stack templates replace defaults with the same relative path.
+- Template roots: every `templates/**` under the ordered stack list.
+- Any extension is allowed; later stacks replace earlier ones with the same relative path.
 - All template outputs must stay under the build root; leading `/` paths are interpreted as “inside build root.”
 
 ## Context and placeholder resolution

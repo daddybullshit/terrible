@@ -87,16 +87,17 @@ function stripInternalFields(def) {
   return next;
 }
 
-// Merge class definitions with stack definitions overriding defaults.
-function mergeClassDefinitions(defaultsDir, stackDir, log) {
-  const rawEntries = [
-    ...loadRawClassEntries(defaultsDir, log, 'defaults'),
-    ...loadRawClassEntries(stackDir, log, 'stack')
-  ].sort((a, b) => {
-    const sourceOrder = { defaults: 0, stack: 1 };
-    const aSrc = sourceOrder[a.__source] ?? 99;
-    const bSrc = sourceOrder[b.__source] ?? 99;
-    if (aSrc !== bSrc) return aSrc - bSrc;
+// Merge class definitions from an ordered list of class directories (later entries override).
+function mergeClassDefinitions(classDirs, log) {
+  const dirs = Array.isArray(classDirs) ? classDirs : [classDirs];
+  const rawEntries = dirs.flatMap((dir, index) => {
+    return loadRawClassEntries(dir, log, `stack_${String(index).padStart(4, '0')}`);
+  }).sort((a, b) => {
+    const aSrc = a.__source || '';
+    const bSrc = b.__source || '';
+    if (aSrc !== bSrc) {
+      return aSrc.localeCompare(bSrc);
+    }
     const aFile = a.__file || '';
     const bFile = b.__file || '';
     return aFile.localeCompare(bFile);
@@ -253,11 +254,11 @@ function applyClassDefaults(obj, resolvedClasses, log, issues) {
   });
 }
 
-// Load, merge, and resolve classes from defaults + stack directories.
-function loadResolvedClasses(stackDir, defaultsDir, log) {
-  const defaultsClassesDir = path.join(defaultsDir, 'classes');
-  const stackClassesDir = path.join(stackDir, 'classes');
-  const classMap = mergeClassDefinitions(defaultsClassesDir, stackClassesDir, log);
+// Load, merge, and resolve classes from ordered stack directories.
+function loadResolvedClasses(stackDirs, log) {
+  const dirs = Array.isArray(stackDirs) ? stackDirs : [stackDirs];
+  const classDirs = dirs.map(dir => path.join(dir, 'classes'));
+  const classMap = mergeClassDefinitions(classDirs, log);
   const resolvedClasses = resolveClasses(classMap, log);
   return { classMap, resolvedClasses };
 }
