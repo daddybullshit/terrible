@@ -7,6 +7,7 @@ const { runBuild } = require('../js/build');
 const { loadStack } = require('../js/stack_loader');
 const { createLogger } = require('../js/logger');
 const { createIssueCollector } = require('../js/issue_collector');
+const { resolveStackDir } = require('../js/stack_paths');
 
 function tempDir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -26,7 +27,7 @@ function runBuildWithStacks(stackDirs, opts = {}) {
     buildRoot,
     buildName,
     includeHash: false,
-    quiet: false,
+    quiet: true,
     warningsAsErrors: true
   });
   return readCanonical(buildRoot, buildName);
@@ -69,11 +70,41 @@ function testEmptyInstancesRootFails() {
   );
 }
 
+function testStackPathsResolveWithCwdPriorityAndRepoFallback() {
+  const originalCwd = process.cwd();
+  const temp = tempDir('terrible-cwd-');
+  process.chdir(temp);
+  try {
+    // Should fall back to repo root (or its parent) when cwd-relative path does not exist.
+    const fallback = resolveStackDir('../stacks/demo');
+    const expectedFallbacks = [
+      path.join(__dirname, '..', 'stacks', 'demo'),
+      path.join(__dirname, '..', '..', 'stacks', 'demo')
+    ].filter(p => fs.existsSync(p));
+    assert.ok(expectedFallbacks.length > 0, 'expected demo stack to exist in repo or parent');
+    assert.ok(expectedFallbacks.some(p => fallback === fs.realpathSync(p)), 'should fall back to repo or parent root for missing cwd path');
+
+    // Should prefer cwd when it exists.
+    const localStacks = path.resolve(temp, '../stacks/demo');
+    fs.mkdirSync(localStacks, { recursive: true });
+    const localResolved = resolveStackDir('../stacks/demo');
+    assert.strictEqual(localResolved, fs.realpathSync(localStacks), 'should prefer cwd when path exists there');
+
+    const absoluteStack = path.join(__dirname, '..', 'stacks', 'recipes');
+    const normalized = resolveStackDir(absoluteStack);
+    assert.strictEqual(normalized, fs.realpathSync(absoluteStack), 'absolute stack paths should resolve');
+  } finally {
+    process.chdir(originalCwd);
+  }
+}
+
 function run() {
   console.log('Running regression: instances include global + ordering...');
   testInstancesIncludeGlobalAndOrdering();
   console.log('Running regression: empty instances root fails...');
   testEmptyInstancesRootFails();
+  console.log('Running regression: stack paths resolve from cwd first, with repo fallback...');
+  testStackPathsResolveWithCwdPriorityAndRepoFallback();
   console.log('All regression tests passed.');
 }
 

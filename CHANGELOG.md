@@ -10,8 +10,10 @@ All notable changes to this project will be documented in this file. This format
 - Validation and canonical exports now include merged class definitions and schemas to aid debugging.
 - CLI can compose multiple stacks (positional stacks or repeatable `--stack`) with optional `--classes-from`/`--instances-from` sources; templates/classes/instances load in declared order (no alphabetical resorting).
 - Build output controls: `--build-root`, `--build-name`, `--build-dir`, and `--hash/--no-hash` to customize build directory location/name and hash suffixing.
+- Shared helper layers split into `js/core/` (canonical/data/merge/fs helpers, services, build helpers) and `js/templates/` (templating engine/helpers), keeping templating-specific logic isolated from general utilities.
 
 ### Changed
 - Documentation refreshed for the new inheritance model, helper set, and deterministic multi-stack CLI (README, build/CLI guide, data model, validation, template syntax).
 - Defaults stack requirement removed; multi-stack builds use a hash-based build directory name (configurable via new build-dir flags); ordering is strict by CLI position.
 - Canonical export now exposes `instancesById` (formerly `stackById`), includes `global` as the first entry in `instances`, and template contexts use `instances`/`instancesById` aliases (no legacy stack aliases).
+- Stack path resolution prefers the current working directory and falls back to the repo root (and its parent for private stacks), with clearer error messages listing attempted paths.

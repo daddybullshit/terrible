@@ -1,6 +1,6 @@
 const path = require('path');
-const { deepMerge, mergeValue } = require('./merge_utils');
-const { findJsonFiles, readJsonFile } = require('./fs_utils');
+const { deepMerge, mergeValue } = require('./core/merge_utils');
+const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
 
 // Load class definitions and schemas into raw entries with provenance.
 // Supports:

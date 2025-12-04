@@ -1,176 +1,18 @@
 const path = require('path');
 const fs = require('fs');
-const { resolveStackDir, buildDirNameFromDirs, stackHashFromDirs } = require('./stack_paths');
+const { stackHashFromDirs, resolveStackDirs, resolveDirs, resolveBuildPaths } = require('./stack_paths');
 const { createLogger } = require('./logger');
 const { loadStack } = require('./stack_loader');
-const { loadTemplates, renderTemplate, resolveOutputPath } = require('./template_utils');
-const { mapLikeToObject } = require('./object_utils');
-const { parentsFor } = require('./template_resolution');
+const { mapLikeToObject } = require('./core/object_utils');
 const { validateStack } = require('./validation');
 const { createIssueCollector } = require('./issue_collector');
+const { createHandlebarsEngine } = require('./templates/handlebars_engine');
+const { createServices } = require('./core/services');
+const { fmt, step, loadEnv, buildClassHierarchy, cleanBuildDir, isReservedId } = require('./core/build_helpers');
 
 const repoRoot = path.join(__dirname, '..');
 const CANONICAL_VERSION = '0.0.0-alpha';
 const CANONICAL_STABILITY = 'experimental';
-const colors = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  cyan: '\x1b[36m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  magenta: '\x1b[35m'
-};
-const ENABLE_COLOR = process.stdout && process.stdout.isTTY && process.env.NO_COLOR !== '1' && process.env.FORCE_COLOR !== '0';
-
-function fmt(text, color) {
-  if (!ENABLE_COLOR || !color || !colors[color]) return text;
-  return `${colors[color]}${text}${colors.reset}`;
-}
-
-function step(label) {
-  return fmt(label, 'bold');
-}
-
-// Build a DAG-style view of class inheritance, respecting declared parent order.
-function buildClassHierarchy(resolvedClasses) {
-  const names = Array.from(resolvedClasses.keys());
-  const parentMap = new Map();
-  const childMap = new Map();
-
-  names.forEach(name => {
-    const def = resolvedClasses.get(name) || {};
-    const parents = parentsFor(def);
-    parentMap.set(name, parents);
-    parents.forEach(parent => {
-      if (!childMap.has(parent)) {
-        childMap.set(parent, new Set());
-      }
-      childMap.get(parent).add(name);
-    });
-  });
-
-  const roots = names.filter(name => parentMap.get(name).length === 0).sort();
-
-  function buildNode(name, seen = new Set()) {
-    const parents = parentMap.get(name) || [];
-    const cycle = seen.has(name);
-    const nextSeen = new Set(seen).add(name);
-    const children = Array.from(childMap.get(name) || []).sort().map(child => buildNode(child, nextSeen));
-    return { class: name, parents, children, cycle };
-  }
-
-  return roots.map(root => buildNode(root));
-}
-
-// Load a .env file into process.env (best-effort; stays silent if missing).
-function loadEnv(envPath) {
-  const target = envPath || path.join(repoRoot, '.env');
-  if (!target || !fs.existsSync(target)) {
-    return;
-  }
-  try {
-    const dotenv = require('dotenv');
-    dotenv.config({ path: target });
-    return;
-  } catch (err) {
-    if (err && err.code !== 'MODULE_NOT_FOUND') {
-      console.warn(`Warning: failed to load .env from ${target}: ${err.message}`);
-    }
-  }
-
-  // Fallback: minimal .env parser to avoid hard failure when dotenv is missing.
-  const contents = fs.readFileSync(target, 'utf8');
-  contents.split(/\r?\n/).forEach(line => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) {
-      return;
-    }
-    const idx = trimmed.indexOf('=');
-    if (idx === -1) {
-      return;
-    }
-    const key = trimmed.slice(0, idx).trim();
-    const value = trimmed.slice(idx + 1).trim();
-    if (key && !Object.prototype.hasOwnProperty.call(process.env, key)) {
-      process.env[key] = value;
-    }
-  });
-}
-
-function isReservedId(id) {
-  return id === 'global';
-}
-
-// Resolve defaults dir relative to CWD, validating existence and type.
-// Render a template for a single build entry and write outputs (including nested file helper outputs).
-function writeTemplate(templateKey, filename, templates, buildDir, obj, instancesById, log, seenOutputs, options = {}) {
-  const { failOnCollisions = false, collisionState, canonical } = options;
-  const collision = (message) => {
-    if (failOnCollisions) {
-      if (collisionState) collisionState.fatal = true;
-      log.error(message);
-    } else {
-      log.warn(message);
-    }
-  };
-
-  const templateContent = templates[templateKey];
-  if (templateContent === undefined) {
-    log.warn(`Template '${templateKey}' not found for ${filename}`);
-    return;
-  }
-
-  const outPath = resolveOutputPath(templateKey, filename, buildDir, log);
-  if (!outPath) {
-    return;
-  }
-
-  const outputs = [];
-  const rendered = renderTemplate(
-    templateKey,
-    templateContent,
-    obj,
-    instancesById,
-    log,
-    { buildDir, outputs, canonical }
-  );
-  if (seenOutputs) {
-    if (seenOutputs.has(outPath)) {
-      collision(`Duplicate output path '${outPath}' from template '${templateKey}'`);
-      if (failOnCollisions) {
-        return;
-      }
-    }
-    seenOutputs.add(outPath);
-  }
-  fs.mkdirSync(path.dirname(outPath), { recursive: true });
-  fs.writeFileSync(outPath, rendered, 'utf8');
-  outputs.forEach(extra => {
-    if (seenOutputs) {
-      if (seenOutputs.has(extra.path)) {
-        collision(`Duplicate output path '${extra.path}' emitted from helper inside '${templateKey}'`);
-        if (failOnCollisions) {
-          return;
-        }
-      }
-      seenOutputs.add(extra.path);
-    }
-    fs.mkdirSync(path.dirname(extra.path), { recursive: true });
-    fs.writeFileSync(extra.path, extra.content, 'utf8');
-  });
-}
-
-// Remove and recreate a build directory, ensuring it stays inside build root.
-function cleanBuildDir(buildDir, buildRoot) {
-  const buildDirRelative = path.relative(buildRoot, buildDir);
-  if (buildDirRelative.startsWith('..') || path.isAbsolute(buildDirRelative)) {
-    throw new Error(`Refusing to delete build directory outside build root: ${buildDir}`);
-  }
-  if (fs.existsSync(buildDir)) {
-    fs.rmSync(buildDir, { recursive: true, force: true });
-  }
-}
 
 // Main build routine (used by CLI).
 // Execution order is intentionally linear and stable to support future hook points:
@@ -194,41 +36,39 @@ function runBuild(options) {
 
   loadEnv(path.join(repoRoot, '.env'));
   const log = createLogger({ quiet });
-    const stackDirs = (Array.isArray(stackDirInputs) ? stackDirInputs : [stackDirInputs])
-    .filter(Boolean)
-    .map(stackPath => {
-      const abs = path.isAbsolute(stackPath) ? stackPath : path.resolve(process.cwd(), stackPath);
-      return resolveStackDir(abs);
-    });
-  const classDirs = (Array.isArray(classDirInputs) && classDirInputs.length ? classDirInputs : stackDirs).map(dir => path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir));
-  const instanceDirs = (Array.isArray(instanceDirInputs) && instanceDirInputs.length ? instanceDirInputs : stackDirs).map(dir => path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir));
+  let stackDirs;
+  try {
+    stackDirs = resolveStackDirs(stackDirInputs);
+  } catch (e) {
+    log.error(e.message);
+    log.summarizeAndExitIfNeeded();
+    return;
+  }
+  const classDirs = resolveDirs(classDirInputs, stackDirs);
+  const instanceDirs = resolveDirs(instanceDirInputs, stackDirs);
 
   if (!stackDirs.length) {
     console.error('At least one --stack is required.');
     process.exit(1);
   }
 
-  const buildRoot = buildDirInput
-    ? (path.isAbsolute(buildDirInput) ? path.dirname(buildDirInput) : path.resolve(process.cwd(), path.dirname(buildDirInput)))
-    : (buildRootInput ? (path.isAbsolute(buildRootInput) ? buildRootInput : path.resolve(process.cwd(), buildRootInput)) : path.join(repoRoot, 'build'));
-
-  let buildDir;
-  if (buildDirInput) {
-    buildDir = path.isAbsolute(buildDirInput) ? buildDirInput : path.join(buildRoot, buildDirInput);
-  } else {
-    const name = buildNameInput
-      ? String(buildNameInput)
-      : buildDirNameFromDirs(stackDirs, { includeHash });
-    buildDir = path.join(buildRoot, name);
-  }
+  const { buildRoot, buildDir } = resolveBuildPaths({
+    buildRootInput,
+    buildDirInput,
+    buildNameInput,
+    stackDirs,
+    includeHash
+  });
 
   try {
+    const templateEngine = createHandlebarsEngine({ stackDirs, log, quiet });
     if (!quiet) {
       console.log(`${step('Step 1/5')} ${fmt('Templates', 'cyan')}`);
       stackDirs.forEach((dir, idx) => console.log(`  ${fmt(`${idx + 1}.`, 'dim')} stack:    ${fmt(path.join(dir, 'templates'), 'dim')}`));
     }
-    const { templates, stats: templateStats } = loadTemplates(stackDirs, log);
-    if (!quiet) {
+    const prepared = templateEngine.prepare();
+    const templateStats = prepared && prepared.templateStats ? prepared.templateStats : templateEngine.templateStats;
+    if (!quiet && templateStats) {
       console.log(`  • loaded ${fmt(templateStats.totalCount, 'green')} (overrides ${templateStats.overrideCount})`);
     }
 
@@ -277,6 +117,8 @@ function runBuild(options) {
       instances: stackObjects.filter(Boolean),
       instancesById: mapLikeToObject(instancesById)
     };
+    const services = createServices(canonical);
+    const canonicalSnapshot = services.snapshot;
 
     if (!quiet) {
       console.log(`${step('Step 3/5')} ${fmt('Prepare build dir', 'cyan')}`);
@@ -284,7 +126,7 @@ function runBuild(options) {
     }
     cleanBuildDir(buildDir, buildRoot);
     fs.mkdirSync(buildDir, { recursive: true });
-    fs.writeFileSync(path.join(buildDir, 'canonical.json'), JSON.stringify(canonical, null, 2));
+    fs.writeFileSync(path.join(buildDir, 'canonical.json'), JSON.stringify(canonicalSnapshot, null, 2));
     const metaDir = path.join(buildDir, 'meta');
     fs.mkdirSync(metaDir, { recursive: true });
     const validationPath = path.join(metaDir, 'validation.json');
@@ -329,87 +171,11 @@ function runBuild(options) {
       console.log(`  • items: ${fmt(buildItemCount, 'green')} across ${instanceCount} objects (+global)`);
       console.log(`  • root:  ${fmt(buildDir, 'dim')}`);
     }
-    const outputPaths = new Set();
-    const plannedPaths = new Map(); // path -> [templateKey, objId]
-    let renderedCount = 0;
-    const collisionState = { fatal: false };
-    const collisionLog = (message) => {
-      if (failOnCollisions) {
-        collisionState.fatal = true;
-        log.error(message);
-      } else {
-        log.warn(message);
-      }
-    };
-
-    // Pre-flight planned outputs to spot collisions early (non-helper outputs only).
-    stack
-      .filter(obj => Array.isArray(obj.build) && obj.build.length > 0)
-      .forEach(obj => {
-        obj.build.forEach(buildItem => {
-          if (typeof buildItem === 'string') {
-            const ext = path.extname(buildItem);
-            const filename = obj.id + ext;
-            const outPath = resolveOutputPath(buildItem, filename, buildDir, log);
-            if (outPath) {
-              const prev = plannedPaths.get(outPath);
-              if (prev && prev[0] !== buildItem) {
-                collisionLog(`Planned output collision at '${outPath}' between templates '${prev[0]}' (object '${prev[1]}') and '${buildItem}' (object '${obj.id}').`);
-              }
-              plannedPaths.set(outPath, [buildItem, obj.id]);
-            }
-            return;
-          }
-          if (typeof buildItem === 'object' && buildItem !== null) {
-            Object.entries(buildItem).forEach(([templateKey, filename]) => {
-              const outPath = resolveOutputPath(templateKey, filename, buildDir, log);
-              if (outPath) {
-                const prev = plannedPaths.get(outPath);
-                if (prev && (prev[0] !== templateKey || prev[1] !== obj.id)) {
-                  collisionLog(`Planned output collision at '${outPath}' between templates '${prev[0]}' (object '${prev[1]}') and '${templateKey}' (object '${obj.id}').`);
-                }
-                plannedPaths.set(outPath, [templateKey, obj.id]);
-              }
-            });
-            return;
-          }
-        });
-      });
-
-    if (collisionState.fatal) {
-      log.error('Output collisions detected during planning; aborting render (--fail-on-collisions).');
+    const renderResult = templateEngine.renderAll({ snapshot: canonicalSnapshot, buildDir, failOnCollisions, canonical: canonicalSnapshot, services });
+    if (renderResult.collisionFatal) {
       return;
     }
-
-    stack
-      .filter(obj => Array.isArray(obj.build) && obj.build.length > 0)
-      .forEach(obj => {
-        if (!quiet) {
-          console.log(`  - ${fmt('process', 'magenta')} ${obj.id}`);
-        }
-        obj.build.forEach(buildItem => {
-          if (typeof buildItem === 'string') {
-            const ext = path.extname(buildItem);
-            const filename = obj.id + ext;
-            writeTemplate(buildItem, filename, templates, buildDir, obj, instancesById, log, outputPaths, { failOnCollisions, collisionState, canonical });
-            renderedCount += 1;
-            return;
-          }
-          if (typeof buildItem === 'object' && buildItem !== null) {
-            Object.entries(buildItem).forEach(([templateKey, filename]) => {
-              writeTemplate(templateKey, filename, templates, buildDir, obj, instancesById, log, outputPaths, { failOnCollisions, collisionState, canonical });
-              renderedCount += 1;
-            });
-            return;
-          }
-          log.warn(`Skipping invalid build entry in ${obj.id}: ${JSON.stringify(buildItem)}`);
-        });
-      });
-
-    if (collisionState.fatal) {
-      log.error('Output collisions detected; build aborted due to --fail-on-collisions.');
-      return;
-    }
+    const renderedCount = renderResult.renderedCount || 0;
 
     if (!quiet) {
       console.log(`${step('Step 5/5')} ${fmt('Complete', 'cyan')}`);

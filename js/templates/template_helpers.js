@@ -1,24 +1,8 @@
-const {
-  classInheritsFrom,
-  mergedSchemaFor,
-  schemaRequires,
-  schemaHasProp,
-  schemaProperties,
-  schemaPropertySource,
-  classLineage,
-  requiredFieldsBySource,
-  entriesFrom,
-  filterEntriesByInheritance,
-  filterList,
-  getByPath,
-  metaFromOptions,
-  resolveTagValue,
-  targetIncludes,
-  toArray
-} = require('./template_resolution');
+const dataUtils = require('../core/data_utils');
+const templateResolution = require('./template_resolution');
 
 // Register all built-in Handlebars helpers used by the renderer.
-function registerHelpers(handlebars, { metaFromOptions: metaFn = metaFromOptions, resolveOutputPath } = {}) {
+function registerHelpers(handlebars, { metaFromOptions: metaFn = templateResolution.metaFromOptions, resolveOutputPath } = {}) {
   if (!handlebars) {
     throw new Error('Handlebars instance is required to register helpers.');
   }
@@ -26,7 +10,20 @@ function registerHelpers(handlebars, { metaFromOptions: metaFn = metaFromOptions
     throw new Error('resolveOutputPath is required to register template helpers.');
   }
 
-  const metaFromOpts = metaFn || metaFromOptions;
+  const metaFromOpts = metaFn || templateResolution.metaFromOptions;
+  const {
+    classInheritsFrom,
+    mergedSchemaFor,
+    schemaRequires,
+    schemaHasProp,
+    schemaProperties,
+    schemaPropertySource,
+    classLineage,
+    requiredFieldsBySource,
+    filterEntriesByInheritance,
+    resolveTagValue
+  } = templateResolution;
+  const { entriesFrom, filterList, getByPath, targetIncludes, toArray } = dataUtils;
 
   handlebars.registerHelper('resolve', function resolveHelper(tag, defaultValue, options) {
     let opts = options;
@@ -101,39 +98,6 @@ function registerHelpers(handlebars, { metaFromOptions: metaFn = metaFromOptions
       return false;
     }
     return targets.every(target => classInheritsFrom(className, target, classesObj));
-  });
-
-  // Legacy beta helpers kept for compatibility.
-  handlebars.registerHelper('beta_inherits_any', function betaInheritsAnyHelper(className) {
-    const args = Array.from(arguments);
-    const options = args.pop();
-    const possibleClasses = args.pop();
-    const targets = args.slice(1); // skip className
-    const classesObj = possibleClasses && typeof possibleClasses === 'object' && !Array.isArray(possibleClasses)
-      ? possibleClasses
-      : options.hash && options.hash.classes;
-    if (!className || !targets.length) {
-      return false;
-    }
-    return targets.some(target => classInheritsFrom(className, target, classesObj));
-  });
-
-  handlebars.registerHelper('beta_inherits_all', function betaInheritsAllHelper(className) {
-    const args = Array.from(arguments);
-    const options = args.pop();
-    const possibleClasses = args.pop();
-    const targets = args.slice(1); // skip className
-    const classesObj = possibleClasses && typeof possibleClasses === 'object' && !Array.isArray(possibleClasses)
-      ? possibleClasses
-      : options.hash && options.hash.classes;
-    if (!className || !targets.length) {
-      return false;
-    }
-    return targets.every(target => classInheritsFrom(className, target, classesObj));
-  });
-
-  handlebars.registerHelper('beta_filter_inherits', function betaFilterInheritsHelper(entries, targetName, classesObj) {
-    return filterEntriesByInheritance(entries, targetName, classesObj);
   });
 
   handlebars.registerHelper('eq', function eqHelper(a, b) {

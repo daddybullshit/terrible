@@ -1,15 +1,11 @@
 const path = require('path');
 const fs = require('fs');
 const { applyClassDefaults, loadResolvedClasses } = require('./class_loader');
-const { deepMerge } = require('./merge_utils');
-const { findJsonFiles, readJsonFile } = require('./fs_utils');
+const { deepMerge } = require('./core/merge_utils');
+const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
+const { isReservedId } = require('./core/build_helpers');
 
 const RESERVED_KEYS = new Set(['id', 'build', 'class']);
-
-// Identify whether an object id is reserved.
-function isReservedId(id) {
-  return id === 'global';
-}
 
 function isReservedKey(key) {
   return RESERVED_KEYS.has(key);

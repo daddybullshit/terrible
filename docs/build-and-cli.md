@@ -8,7 +8,7 @@ The CLI is a thin wrapper over the build pipeline. It resolves paths, loads data
 - Optional sources: `--classes-from <stackDir>` and/or `--instances-from <stackDir>` to pull classes or instances/global from specific stacks (defaults to the `--stack` list and order).
 - Output control: `--build-root <dir>` to change the root (default `<repo>/build`); `--build-name <name>` to set the build directory name; `--build-dir <path>` for a full path override; `--hash/--no-hash` toggles hash suffixing when auto-naming.
 - Flags: `--warnings-as-errors`, `--warn-extra-fields`, `--fail-on-collisions`, `--quiet`.
-- `.env` at the repo root is loaded automatically. Stack paths are resolved from your current working directory; outputs always land in `build/<stack>-<hash>/` (multi-stack builds use a hash-based `stackset-<hash>` directory).
+- `.env` at the repo root is loaded automatically. Stack paths resolve from your current working directory; if missing there we fall back to the repo root (and its parent, for private stacks). Outputs always land in `build/<stack>-<hash>/` (multi-stack builds use a hash-based `stackset-<hash>` directory).
 
 ## Pipeline stages
 1. **Templates**: load templates from each stack in declared order; later stacks override earlier ones (no alphabetical resorting).

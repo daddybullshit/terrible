@@ -45,13 +45,13 @@ function normalizeDirPath(dirInput) {
     : path.resolve(process.cwd(), dirInput);
 
   if (!fs.existsSync(abs)) {
-    throw new Error(`Directory does not exist: ${dirInput}`);
+    throw new Error(`Directory does not exist: ${dirInput} (resolved to ${abs})`);
   }
 
   const real = fs.realpathSync(abs);
   const stat = fs.statSync(real);
   if (!stat.isDirectory()) {
-    throw new Error(`Path is not a directory: ${dirInput}`);
+    throw new Error(`Path is not a directory: ${dirInput} (resolved to ${abs})`);
   }
   return real;
 }

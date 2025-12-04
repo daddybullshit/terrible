@@ -1,12 +1,46 @@
 const crypto = require('crypto');
+const fs = require('fs');
 const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
-const { normalizeDirPath } = require('./fs_utils');
+const { normalizeDirPath } = require('./core/fs_utils');
 
-// Normalize a stack directory path.
+const repoRoot = path.join(__dirname, '..');
+
+function toArray(value) {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean);
+  }
+  return value ? [value] : [];
+}
+
+// Normalize a stack directory path. Tries CWD first (like mv/cp), then repo root for convenience.
 function normalizeStackDir(stackDirInput) {
-  return normalizeDirPath(stackDirInput);
+  if (!stackDirInput) {
+    throw new Error('Directory path is required.');
+  }
+  const candidates = [];
+  if (path.isAbsolute(stackDirInput)) {
+    candidates.push(stackDirInput);
+  } else {
+    candidates.push(path.resolve(process.cwd(), stackDirInput));
+    candidates.push(path.resolve(repoRoot, stackDirInput));
+    candidates.push(path.resolve(repoRoot, '..', stackDirInput));
+  }
+  const attempts = new Set();
+  for (const candidate of candidates) {
+    attempts.add(candidate);
+    if (!fs.existsSync(candidate)) {
+      continue;
+    }
+    try {
+      return normalizeDirPath(candidate);
+    } catch (err) {
+      // If this candidate fails, continue to the next; fall through to combined error below.
+    }
+  }
+  const attemptedList = Array.from(attempts).join(', ');
+  throw new Error(`Directory does not exist: ${stackDirInput} (tried ${attemptedList})`);
 }
 
 // Hash a stack path (or identifier string) to produce a short, deterministic build dir suffix.
@@ -59,6 +93,32 @@ function getBuildDirName(stackDirInput) {
   return buildDirNameFromPath(stackDir);
 }
 
+function resolveStackDirs(inputs) {
+  return toArray(inputs).map(stackPath => normalizeStackDir(stackPath));
+}
+
+function resolveDirs(inputs, fallbackDirs) {
+  const dirs = toArray(inputs);
+  const chosen = dirs.length ? dirs : fallbackDirs;
+  return chosen.map(dir => (path.isAbsolute(dir) ? dir : path.resolve(process.cwd(), dir)));
+}
+
+function resolveBuildPaths({ buildRootInput, buildDirInput, buildNameInput, stackDirs, includeHash }) {
+  const resolvedBuildRoot = buildDirInput
+    ? (path.isAbsolute(buildDirInput) ? path.dirname(buildDirInput) : path.resolve(process.cwd(), path.dirname(buildDirInput)))
+    : (buildRootInput ? (path.isAbsolute(buildRootInput) ? buildRootInput : path.resolve(process.cwd(), buildRootInput)) : path.join(repoRoot, 'build'));
+
+  if (buildDirInput) {
+    const absoluteBuildDir = path.isAbsolute(buildDirInput) ? buildDirInput : path.join(resolvedBuildRoot, buildDirInput);
+    return { buildRoot: resolvedBuildRoot, buildDir: absoluteBuildDir };
+  }
+
+  const name = buildNameInput
+    ? String(buildNameInput)
+    : buildDirNameFromDirs(stackDirs, { includeHash });
+  return { buildRoot: resolvedBuildRoot, buildDir: path.join(resolvedBuildRoot, name) };
+}
+
 if (require.main === module) {
   const argv = yargs(hideBin(process.argv))
     .usage('Usage: node stack_paths.js <stackDir> [--hash|--build-dir-name]')
@@ -98,5 +158,8 @@ module.exports = {
   stackHashFromPath,
   buildDirNameFromPath,
   stackHashFromDirs,
-  buildDirNameFromDirs
+  buildDirNameFromDirs,
+  resolveStackDirs,
+  resolveDirs,
+  resolveBuildPaths
 };

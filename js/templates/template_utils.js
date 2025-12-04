@@ -1,8 +1,8 @@
 const path = require('path');
 const fs = require('fs');
 const Handlebars = require('handlebars');
-const { scanDir } = require('./fs_utils');
-const { mapLikeToObject } = require('./object_utils');
+const { scanDir } = require('../core/fs_utils');
+const { mapLikeToObject } = require('../core/object_utils');
 const { globalsFromInstances, metaFromOptions } = require('./template_resolution');
 const { registerHelpers } = require('./template_helpers');
 
