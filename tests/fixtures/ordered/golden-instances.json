@@ -1,0 +1,36 @@
+{
+  "canonicalVersion": "0.0.0-alpha",
+  "canonicalStability": "experimental",
+  "breakingChangesWithoutVersionBump": true,
+  "buildMeta": {
+    "mode": "instances-only",
+    "buildDirName": "instances"
+  },
+  "global": {
+    "id": "global",
+    "build": [],
+    "stack": "a"
+  },
+  "instances": [
+    {
+      "id": "global"
+    },
+    {
+      "id": "alpha",
+      "class": "item",
+      "val": "a",
+      "build": []
+    }
+  ],
+  "instancesById": {
+    "alpha": {
+      "id": "alpha",
+      "class": "item",
+      "val": "a"
+    },
+    "global": {
+      "id": "global",
+      "stack": "a"
+    }
+  }
+}

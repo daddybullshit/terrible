@@ -42,6 +42,11 @@ const requireDirs = (dirs, label, altHint) => {
 const parser = yargs(hideBin(process.argv))
   .scriptName('terrible')
   .usage('Usage: terrible <command> [options]')
+  .example('terrible build stacks/recipes', 'Build a single stack')
+  .example('terrible build --stack stacks/a --stack stacks/b', 'Build multiple stacks')
+  .example('terrible build --classes-from stacks/schemas --instances-from stacks/data', 'Separate sources')
+  .example('terrible validate stacks/mystack', 'Validate without rendering')
+  .example('terrible classes stacks/schemas', 'Build class definitions only')
   .command(
     'build [stacks..]',
     'Build one or more stacks',
@@ -104,6 +109,7 @@ const parser = yargs(hideBin(process.argv))
       process.exit(result.status || 0);
     }
   )
+  .epilogue('Docs: docs/build-and-cli.md | Outputs: build/<stack>-<hash>/')
   .help()
   .strict()
   .showHelpOnFail(false);

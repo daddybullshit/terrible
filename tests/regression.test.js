@@ -19,6 +19,24 @@ function readCanonical(buildRoot, name) {
   return JSON.parse(data);
 }
 
+// Deep subset check: verify actual contains all keys/values from expected
+function assertSubset(actual, expected, path = '') {
+  if (expected === null || typeof expected !== 'object') {
+    assert.deepStrictEqual(actual, expected, `Mismatch at ${path || 'root'}`);
+    return;
+  }
+  if (Array.isArray(expected)) {
+    assert.ok(Array.isArray(actual), `Expected array at ${path}`);
+    assert.strictEqual(actual.length, expected.length, `Array length mismatch at ${path}`);
+    expected.forEach((item, i) => assertSubset(actual[i], item, `${path}[${i}]`));
+    return;
+  }
+  assert.ok(actual && typeof actual === 'object', `Expected object at ${path}`);
+  Object.keys(expected).forEach(key => {
+    assertSubset(actual[key], expected[key], path ? `${path}.${key}` : key);
+  });
+}
+
 function runBuildWithStacks(stackDirs, opts = {}) {
   const buildRoot = opts.buildRoot || tempDir('terrible-test-');
   const buildName = opts.buildName || 'test-build';
@@ -177,6 +195,68 @@ function testMixedSourceValidation() {
   // If we get here without throwing, mixed-source validation works
 }
 
+function testGoldenFullBuild() {
+  const fixtureRoot = path.join(__dirname, 'fixtures', 'ordered');
+  const stackA = path.join(fixtureRoot, 'a');
+  const stackB = path.join(fixtureRoot, 'b');
+  const buildRoot = tempDir('terrible-golden-');
+  const buildName = 'full';
+
+  runBuild({
+    classDirs: [stackA, stackB],
+    instanceDirs: [stackA, stackB],
+    buildRoot,
+    buildName,
+    includeHash: false,
+    quiet: true
+  });
+
+  const canonical = readCanonical(buildRoot, buildName);
+  const golden = JSON.parse(fs.readFileSync(path.join(fixtureRoot, 'golden-full.json'), 'utf8'));
+
+  assertSubset(canonical, golden);
+}
+
+function testGoldenClassesBuild() {
+  const fixtureRoot = path.join(__dirname, 'fixtures', 'ordered');
+  const stackA = path.join(fixtureRoot, 'a');
+  const buildRoot = tempDir('terrible-golden-');
+  const buildName = 'classes';
+
+  runClassesBuild({
+    classDirs: [stackA],
+    buildRoot,
+    buildName,
+    includeHash: false,
+    quiet: true
+  });
+
+  const canonical = readCanonical(buildRoot, buildName);
+  const golden = JSON.parse(fs.readFileSync(path.join(fixtureRoot, 'golden-classes.json'), 'utf8'));
+
+  assertSubset(canonical, golden);
+}
+
+function testGoldenInstancesBuild() {
+  const fixtureRoot = path.join(__dirname, 'fixtures', 'ordered');
+  const stackA = path.join(fixtureRoot, 'a');
+  const buildRoot = tempDir('terrible-golden-');
+  const buildName = 'instances';
+
+  runInstancesBuild({
+    instanceDirs: [stackA],
+    buildRoot,
+    buildName,
+    includeHash: false,
+    quiet: true
+  });
+
+  const canonical = readCanonical(buildRoot, buildName);
+  const golden = JSON.parse(fs.readFileSync(path.join(fixtureRoot, 'golden-instances.json'), 'utf8'));
+
+  assertSubset(canonical, golden);
+}
+
 function testInstancesOnlyBuild() {
   const fixtureRoot = path.join(__dirname, 'fixtures', 'ordered');
   const stackA = path.join(fixtureRoot, 'a');
@@ -219,6 +299,12 @@ function run() {
   testValidateOnlyCommand();
   console.log('Running regression: mixed-source validation...');
   testMixedSourceValidation();
+  console.log('Running regression: golden full build output...');
+  testGoldenFullBuild();
+  console.log('Running regression: golden classes build output...');
+  testGoldenClassesBuild();
+  console.log('Running regression: golden instances build output...');
+  testGoldenInstancesBuild();
   console.log('All regression tests passed.');
 }
 

@@ -1,0 +1,59 @@
+{
+  "canonicalVersion": "0.0.0-alpha",
+  "canonicalStability": "experimental",
+  "breakingChangesWithoutVersionBump": true,
+  "buildMeta": {
+    "mode": "full",
+    "buildDirName": "full"
+  },
+  "global": {
+    "id": "global",
+    "build": [],
+    "stack": "b",
+    "note": "second"
+  },
+  "classes": {
+    "item": {
+      "class": "item",
+      "from": "stack-b",
+      "defaults": "a",
+      "extra": true
+    }
+  },
+  "classHierarchy": [
+    {
+      "class": "item",
+      "parents": [],
+      "children": [],
+      "cycle": false
+    }
+  ],
+  "instances": [
+    {
+      "id": "global"
+    },
+    {
+      "id": "alpha",
+      "class": "item",
+      "val": "b",
+      "build": [],
+      "tags": ["t1", "t2"],
+      "from": "stack-b",
+      "defaults": "a",
+      "extra": true
+    }
+  ],
+  "instancesById": {
+    "alpha": {
+      "id": "alpha",
+      "class": "item",
+      "val": "b",
+      "tags": ["t1", "t2"]
+    },
+    "global": {
+      "id": "global",
+      "stack": "b",
+      "note": "second"
+    }
+  }
+}

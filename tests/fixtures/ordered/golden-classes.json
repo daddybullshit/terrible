@@ -1,0 +1,24 @@
+{
+  "canonicalVersion": "0.0.0-alpha",
+  "canonicalStability": "experimental", 
+  "breakingChangesWithoutVersionBump": true,
+  "buildMeta": {
+    "mode": "classes-only",
+    "buildDirName": "classes"
+  },
+  "classes": {
+    "item": {
+      "class": "item",
+      "from": "stack-a",
+      "defaults": "a"
+    }
+  },
+  "classHierarchy": [
+    {
+      "class": "item",
+      "parents": [],
+      "children": [],
+      "cycle": false
+    }
+  ]
+}
