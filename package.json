@@ -1,6 +1,6 @@
 {
   "name": "terrible",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha",
   "description": "CLI wrappers and build tooling for rendering stack templates into hashed build directories.",
   "main": "index.js",
   "directories": {
