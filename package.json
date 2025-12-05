@@ -7,7 +7,9 @@
     "doc": "docs"
   },
   "scripts": {
-    "test": "node tests/regression.test.js"
+    "test": "node tests/core.test.js && node tests/regression.test.js",
+    "test:core": "node tests/core.test.js",
+    "test:regression": "node tests/regression.test.js"
   },
   "keywords": [],
   "author": "",

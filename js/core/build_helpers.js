@@ -87,11 +87,104 @@ function buildClassHierarchy(resolvedClasses) {
   return roots.map(root => buildNode(root));
 }
 
+// --- Constants ---
+const CANONICAL = {
+  version: '0.0.0-alpha',
+  stability: 'experimental',
+  breakingChanges: true
+};
+
+const OUTPUT_TYPES = {
+  CANONICAL: 'canonical',
+  CLASS_DEFINITIONS: 'class-definitions',
+  SCHEMAS: 'schemas',
+  INSTANCES: 'instances',
+  VALIDATION: 'validation',
+  TEMPLATES: 'templates',
+  JSON: 'json',
+  SUMMARY: 'summary'
+};
+
+// --- Output writers ---
+
+function writeCanonical(buildDir, data, log) {
+  const filePath = path.join(buildDir, 'canonical.json');
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  log.info(`  • canonical: ${fmt(filePath, 'dim')}`);
+}
+
+function writeValidation(metaDir, issues, log) {
+  fs.mkdirSync(metaDir, { recursive: true });
+  const filePath = path.join(metaDir, 'validation.json');
+  fs.writeFileSync(filePath, JSON.stringify({ issues }, null, 2));
+  log.info(`  • validation report: ${fmt(filePath, 'dim')}`);
+}
+
+function writeClassDefinitions(metaDir, resolvedClasses, log) {
+  const classDefsDir = path.join(metaDir, 'class-definitions');
+  let count = 0;
+  resolvedClasses.forEach((def, name) => {
+    if (def) {
+      if (count === 0) fs.mkdirSync(classDefsDir, { recursive: true });
+      fs.writeFileSync(path.join(classDefsDir, `${name}.json`), JSON.stringify(def, null, 2));
+      count += 1;
+    }
+  });
+  log.info(`  • class definitions: ${fmt(count, count ? 'green' : 'dim')} written to ${fmt(classDefsDir, 'dim')}`);
+  return count;
+}
+
+function writeSchemas(metaDir, resolvedClasses, log) {
+  const schemasDir = path.join(metaDir, 'class-schemas');
+  let count = 0;
+  resolvedClasses.forEach((def, name) => {
+    if (def) {
+      if (count === 0) fs.mkdirSync(schemasDir, { recursive: true });
+      const schemaContent = def.schema || {};
+      fs.writeFileSync(path.join(schemasDir, `${name}.schema.json`), JSON.stringify(schemaContent, null, 2));
+      count += 1;
+    }
+  });
+  if (count > 0) {
+    log.info(`  • class schemas: ${fmt(count, 'green')} written to ${fmt(schemasDir, 'dim')}`);
+  } else {
+    log.info('  • class schemas: none (no schemas defined)');
+  }
+  return count;
+}
+
+function writeInstances(metaDir, stackObjects, log) {
+  const instancesDir = path.join(metaDir, 'instances');
+  fs.mkdirSync(instancesDir, { recursive: true });
+  let count = 0;
+  stackObjects.filter(obj => obj && obj.id).forEach(obj => {
+    fs.writeFileSync(path.join(instancesDir, `${obj.id}.json`), JSON.stringify(obj, null, 2));
+    count += 1;
+  });
+  log.info(`  • instances: ${fmt(count, 'green')} written to ${fmt(instancesDir, 'dim')}`);
+  return count;
+}
+
+// Log source directories with consistent formatting
+function logSourceDirs(dirs, type, log) {
+  dirs.forEach((dir, idx) => {
+    log.info(`  ${fmt(`${idx + 1}.`, 'dim')} ${type}:${fmt(path.join(dir, type), 'dim')}`);
+  });
+}
+
 module.exports = {
   buildClassHierarchy,
+  CANONICAL,
   cleanBuildDir,
   fmt,
   isReservedId,
   loadEnv,
-  step
+  logSourceDirs,
+  OUTPUT_TYPES,
+  step,
+  writeCanonical,
+  writeClassDefinitions,
+  writeInstances,
+  writeSchemas,
+  writeValidation
 };

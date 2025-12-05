@@ -2,6 +2,10 @@ const path = require('path');
 const { deepMerge, mergeValue } = require('./core/merge_utils');
 const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
 const { parentsFor } = require('./core/canonical_helpers');
+const { asArray } = require('./core/object_utils');
+
+// --- Helpers ---
+const RESERVED_CLASS_KEYS = new Set(['class', 'parent', 'id', 'schema']);
 
 // Load class definitions and schemas into raw entries with provenance.
 // Supports:
@@ -42,38 +46,21 @@ function loadRawClassEntries(dirPath, log, sourceLabel) {
     .filter(Boolean);
 }
 
-function normalizeParents(def, log) {
-  if (!def || typeof def !== 'object') {
-    return def;
-  }
-  const add = (list, val) => {
-    if (!val) return;
-    if (Array.isArray(val)) {
-      val.forEach(v => add(list, v));
-      return;
-    }
-    const key = String(val);
-    if (!list.includes(key)) {
-      list.push(key);
-    }
-  };
+function normalizeParents(def) {
+  if (!def || typeof def !== 'object') return def;
 
-  const parents = [];
-  add(parents, def.parent);
-  add(parents, def.parents);
+  // Collect unique parents from both parent and parents fields
+  const seen = new Set();
+  const parents = [...asArray(def.parent), ...asArray(def.parents)]
+    .map(String)
+    .filter(p => p && !seen.has(p) && seen.add(p));
 
   const next = { ...def };
+  delete next.parents;
   if (parents.length > 0) {
     next.parent = parents;
   } else {
     delete next.parent;
-  }
-  if (next.parents !== undefined) {
-    delete next.parents;
-  }
-  if (!Array.isArray(next.parent) && next.parent !== undefined) {
-    log && log.warn && log.warn(`Normalized parent for class '${def.class || 'unknown'}' to array form.`);
-    next.parent = parents;
   }
   return next;
 }
@@ -88,21 +75,17 @@ function stripInternalFields(def) {
   return next;
 }
 
+// Sort by source then file for deterministic ordering
+function compareEntries(a, b) {
+  const srcCmp = (a.__source || '').localeCompare(b.__source || '');
+  return srcCmp !== 0 ? srcCmp : (a.__file || '').localeCompare(b.__file || '');
+}
+
 // Merge class definitions from an ordered list of class directories (later entries override).
 function mergeClassDefinitions(classDirs, log) {
-  const dirs = Array.isArray(classDirs) ? classDirs : [classDirs];
-  const rawEntries = dirs.flatMap((dir, index) => {
-    return loadRawClassEntries(dir, log, `stack_${String(index).padStart(4, '0')}`);
-  }).sort((a, b) => {
-    const aSrc = a.__source || '';
-    const bSrc = b.__source || '';
-    if (aSrc !== bSrc) {
-      return aSrc.localeCompare(bSrc);
-    }
-    const aFile = a.__file || '';
-    const bFile = b.__file || '';
-    return aFile.localeCompare(bFile);
-  });
+  const rawEntries = asArray(classDirs)
+    .flatMap((dir, index) => loadRawClassEntries(dir, log, `stack_${String(index).padStart(4, '0')}`))
+    .sort(compareEntries);
 
   const classMap = new Map();
   rawEntries.forEach(entry => {
@@ -125,7 +108,7 @@ function mergeClassDefinitions(classDirs, log) {
 
   // Normalize parent/parents to a single ordered array form for determinism.
   classMap.forEach((def, name) => {
-    classMap.set(name, stripInternalFields(normalizeParents(def, log)));
+    classMap.set(name, stripInternalFields(normalizeParents(def)));
   });
 
   return classMap;
@@ -180,64 +163,43 @@ function resolveClasses(classMap, log) {
 
 // Apply resolved class defaults onto an object, respecting append/reset semantics.
 function applyClassDefaults(obj, resolvedClasses, log, issues) {
-  if (!obj || typeof obj.class !== 'string') {
-    return;
-  }
+  if (!obj || typeof obj.class !== 'string') return;
+
+  const warn = (msg, meta) => issues ? issues.warn(msg, meta) : log.warn(msg);
+
   const classDef = resolvedClasses.get(obj.class);
   if (!classDef) {
-    if (issues) {
-      issues.warn(`Object '${obj.id}' references unknown class '${obj.class}'.`, {
-        code: 'unknown_class',
-        id: obj.id,
-        class: obj.class
-      });
-    } else {
-      log.warn(`Object '${obj.id}' references unknown class '${obj.class}'.`);
-    }
+    warn(`Object '${obj.id}' references unknown class '${obj.class}'.`, {
+      code: 'unknown_class', id: obj.id, class: obj.class
+    });
     return;
   }
 
   // Warn if required fields (from class schema) are missing before defaults apply.
-  const requiredFields = Array.isArray(classDef.schema && classDef.schema.required)
-    ? classDef.schema.required
-    : [];
+  const requiredFields = asArray(classDef.schema?.required);
   const requiredSet = new Set(requiredFields);
-  requiredFields.forEach(field => {
-    if (obj[field] === undefined) {
-      const message = `Object '${obj.id}' is missing required field '${field}' (class '${obj.class}') before defaults; validation will fail unless the instance provides it.`;
-      if (issues) {
-        issues.warn(message, {
-          code: 'required_missing_pre_defaults',
-          id: obj.id,
-          class: obj.class,
-          field
-        });
-      } else {
-        log.warn(message);
-      }
-    }
-  });
+  
+  requiredFields
+    .filter(field => obj[field] === undefined)
+    .forEach(field => {
+      warn(`Object '${obj.id}' is missing required field '${field}' (class '${obj.class}') before defaults; validation will fail unless the instance provides it.`, {
+        code: 'required_missing_pre_defaults', id: obj.id, class: obj.class, field
+      });
+    });
 
-  Object.entries(classDef).forEach(([key, value]) => {
-    if (['class', 'parent', 'id', 'schema'].includes(key)) {
-      return;
-    }
-    if (value === null || value === undefined) {
-      return;
-    }
-    const isRequired = requiredSet.has(key);
-    if (isRequired && obj[key] === undefined) {
-      // Leave required fields untouched so validation can catch truly missing data.
-      return;
-    }
-    obj[key] = mergeValue(value, obj[key]);
-  });
+  // Apply class defaults to non-reserved fields
+  Object.entries(classDef)
+    .filter(([key, value]) => !RESERVED_CLASS_KEYS.has(key) && value != null)
+    .forEach(([key, value]) => {
+      // Leave required fields untouched so validation can catch truly missing data
+      if (requiredSet.has(key) && obj[key] === undefined) return;
+      obj[key] = mergeValue(value, obj[key]);
+    });
 }
 
 // Load, merge, and resolve classes from ordered stack directories.
 function loadResolvedClasses(stackDirs, log) {
-  const dirs = Array.isArray(stackDirs) ? stackDirs : [stackDirs];
-  const classDirs = dirs.map(dir => path.join(dir, 'classes'));
+  const classDirs = asArray(stackDirs).map(dir => path.join(dir, 'classes'));
   const classMap = mergeClassDefinitions(classDirs, log);
   const resolvedClasses = resolveClasses(classMap, log);
   return { classMap, resolvedClasses };

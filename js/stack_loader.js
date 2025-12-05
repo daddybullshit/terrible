@@ -4,6 +4,7 @@ const { applyClassDefaults, loadResolvedClasses } = require('./class_loader');
 const { deepMerge } = require('./core/merge_utils');
 const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
 const { isReservedId } = require('./core/build_helpers');
+const { asArray } = require('./core/object_utils');
 
 const RESERVED_KEYS = new Set(['id', 'build', 'class']);
 
@@ -158,21 +159,8 @@ function inspectInstanceRoots(roots) {
   });
 }
 
-// First pass: load/merge classes + schemas deterministically from ordered roots.
-function loadClassesAndSchemas(classDirs, log) {
-  const roots = Array.isArray(classDirs) ? classDirs : [classDirs];
-  ensureDirectoriesExist(roots, 'Classes');
-  const { resolvedClasses } = loadResolvedClasses(roots, log);
-  return resolvedClasses;
-}
-
-// Second pass: load/merge instances/global using resolved classes.
-function loadInstances({ instanceDirs, resolvedClasses, log, issues }) {
-  const roots = Array.isArray(instanceDirs) ? instanceDirs : [instanceDirs];
-  if (!roots.length) {
-    throw new Error('At least one instances root is required.');
-  }
-
+// Core instance merging logic (shared by loadInstances and loadInstancesOnly)
+function mergeInstanceFiles(roots, log) {
   ensureDirectoriesExist(roots, 'Instances');
 
   const inspections = inspectInstanceRoots(roots);
@@ -213,15 +201,39 @@ function loadInstances({ instanceDirs, resolvedClasses, log, issues }) {
   });
 
   merged.set('global', mergedGlobals);
+  return { merged, global: mergedGlobals };
+}
+
+// Build ordered stackObjects array with global first
+function buildStackObjectsArray(instancesById) {
+  return ['global', ...Array.from(instancesById.keys()).filter(k => k !== 'global')]
+    .map(key => instancesById.get(key))
+    .filter(Boolean);
+}
+
+// First pass: load/merge classes + schemas deterministically from ordered roots.
+function loadClassesAndSchemas(classDirs, log) {
+  const roots = asArray(classDirs);
+  ensureDirectoriesExist(roots, 'Classes');
+  const { resolvedClasses } = loadResolvedClasses(roots, log);
+  return resolvedClasses;
+}
+
+// Second pass: load/merge instances/global using resolved classes.
+function loadInstances({ instanceDirs, resolvedClasses, log, issues }) {
+  const roots = asArray(instanceDirs);
+  if (!roots.length) {
+    throw new Error('At least one instances root is required.');
+  }
+
+  const { merged, global: mergedGlobals } = mergeInstanceFiles(roots, log);
 
   const stackObjects = Array.from(merged.values());
   stackObjects.forEach(obj => applyClassDefaults(obj, resolvedClasses, log, issues));
 
   const withMetadata = attachGlobalMetadataToStack(stackObjects, resolvedClasses, merged);
   return {
-    stackObjects: ['global', ...Array.from(withMetadata.keys()).filter(k => k !== 'global')]
-      .map(key => withMetadata.get(key))
-      .filter(Boolean),
+    stackObjects: buildStackObjectsArray(withMetadata),
     instancesById: withMetadata,
     global: mergedGlobals
   };
@@ -229,7 +241,7 @@ function loadInstances({ instanceDirs, resolvedClasses, log, issues }) {
 
 // Load, merge, and resolve stack data from ordered stack/class/instance roots.
 function loadStack({ stackDirs, classDirs, instanceDirs, log, issues }) {
-  const stacks = Array.isArray(stackDirs) ? stackDirs : [stackDirs];
+  const stacks = asArray(stackDirs);
   if (!stacks.length) {
     throw new Error('At least one stack directory is required.');
   }
@@ -239,8 +251,8 @@ function loadStack({ stackDirs, classDirs, instanceDirs, log, issues }) {
     }
   });
 
-  const classRoots = Array.isArray(classDirs) && classDirs.length ? classDirs : stacks;
-  const instanceRoots = Array.isArray(instanceDirs) && instanceDirs.length ? instanceDirs : stacks;
+  const classRoots = asArray(classDirs).length ? asArray(classDirs) : stacks;
+  const instanceRoots = asArray(instanceDirs).length ? asArray(instanceDirs) : stacks;
 
   const resolvedClasses = loadClassesAndSchemas(classRoots, log);
   const { stackObjects, instancesById, global } = loadInstances({ instanceDirs: instanceRoots, resolvedClasses, log, issues });
@@ -256,60 +268,16 @@ function loadStack({ stackDirs, classDirs, instanceDirs, log, issues }) {
 // Load and merge instances only (no class resolution, no validation).
 // Returns raw merged instance data without class defaults applied.
 function loadInstancesOnly({ instanceDirs, log }) {
-  const roots = Array.isArray(instanceDirs) ? instanceDirs : [instanceDirs];
+  const roots = asArray(instanceDirs);
   if (!roots.length) {
     throw new Error('At least one instances root is required.');
   }
 
-  ensureDirectoriesExist(roots, 'Instances');
-
-  const inspections = inspectInstanceRoots(roots);
-  const emptyRoots = inspections.filter(entry => !entry.hasGlobal && !entry.hasInstances).map(entry => entry.root);
-  if (emptyRoots.length) {
-    throw new Error(`No instance or global files found in ${emptyRoots.join(', ')}`);
-  }
-
-  const merged = new Map();
-  let mergedGlobals = { id: 'global', build: [] };
-
-  inspections.forEach(entry => {
-    const { globalPath, instancesDir, hasGlobal } = entry;
-    const files = loadStackFiles(instancesDir, { required: false, log });
-
-    if (hasGlobal) {
-      try {
-        const data = readJsonFile(globalPath);
-        mergedGlobals = deepMerge(mergedGlobals, data);
-      } catch (err) {
-        log.error(`Failed to parse ${globalPath}: ${err.message}`);
-      }
-    }
-
-    files.forEach(obj => {
-      if (obj.id === 'global') {
-        mergedGlobals = deepMerge(mergedGlobals, obj);
-        return;
-      }
-      if (merged.has(obj.id)) {
-        const mergedObj = deepMerge(merged.get(obj.id), obj);
-        mergedObj.id = obj.id;
-        merged.set(obj.id, mergedObj);
-      } else {
-        merged.set(obj.id, obj);
-      }
-    });
-  });
-
-  merged.set('global', mergedGlobals);
-
-  const stackObjects = Array.from(merged.values());
-  const instancesById = new Map(merged);
+  const { merged, global: mergedGlobals } = mergeInstanceFiles(roots, log);
 
   return {
-    stackObjects: ['global', ...Array.from(instancesById.keys()).filter(k => k !== 'global')]
-      .map(key => instancesById.get(key))
-      .filter(Boolean),
-    instancesById,
+    stackObjects: buildStackObjectsArray(merged),
+    instancesById: merged,
     global: mergedGlobals
   };
 }

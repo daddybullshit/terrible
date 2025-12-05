@@ -8,70 +8,54 @@ const { validateStack } = require('./validation');
 const { createIssueCollector } = require('./issue_collector');
 const { createHandlebarsEngine } = require('./templates/handlebars_engine');
 const { createServices } = require('./core/services');
-const { fmt, step, loadEnv, buildClassHierarchy, cleanBuildDir, isReservedId } = require('./core/build_helpers');
+const {
+  fmt, step, loadEnv, buildClassHierarchy, cleanBuildDir, isReservedId,
+  CANONICAL, OUTPUT_TYPES, logSourceDirs,
+  writeCanonical, writeClassDefinitions, writeInstances, writeSchemas, writeValidation
+} = require('./core/build_helpers');
 
 const repoRoot = path.join(__dirname, '..');
-const CANONICAL_VERSION = '0.0.0-alpha';
-const CANONICAL_STABILITY = 'experimental';
 
-// --- Output writers (shared by build commands) ---
+// --- Build initialization helpers ---
 
-function writeCanonical(buildDir, data, log) {
-  const filePath = path.join(buildDir, 'canonical.json');
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  log.info(`  • canonical: ${fmt(filePath, 'dim')}`);
+function initBuildEnv(quiet) {
+  loadEnv(path.join(repoRoot, '.env'));
+  return createLogger({ quiet });
 }
 
-function writeValidation(metaDir, issues, log) {
-  fs.mkdirSync(metaDir, { recursive: true });
-  const filePath = path.join(metaDir, 'validation.json');
-  fs.writeFileSync(filePath, JSON.stringify({ issues }, null, 2));
-  log.info(`  • validation report: ${fmt(filePath, 'dim')}`);
-}
-
-function writeClassDefinitions(metaDir, resolvedClasses, log) {
-  const classDefsDir = path.join(metaDir, 'class-definitions');
-  let count = 0;
-  resolvedClasses.forEach((def, name) => {
-    if (def) {
-      if (count === 0) fs.mkdirSync(classDefsDir, { recursive: true });
-      fs.writeFileSync(path.join(classDefsDir, `${name}.json`), JSON.stringify(def, null, 2));
-      count += 1;
+function resolveSourceDirs(inputs, label, log) {
+  try {
+    const dirs = resolveStackDirs(inputs);
+    if (!dirs.length) {
+      throw new Error(`At least one ${label} source is required.`);
     }
-  });
-  log.info(`  • class definitions: ${fmt(count, count ? 'green' : 'dim')} written to ${fmt(classDefsDir, 'dim')}`);
-  return count;
-}
-
-function writeSchemas(metaDir, resolvedClasses, log) {
-  const schemasDir = path.join(metaDir, 'class-schemas');
-  let count = 0;
-  resolvedClasses.forEach((def, name) => {
-    if (def) {
-      if (count === 0) fs.mkdirSync(schemasDir, { recursive: true });
-      const schemaContent = def.schema || {};
-      fs.writeFileSync(path.join(schemasDir, `${name}.schema.json`), JSON.stringify(schemaContent, null, 2));
-      count += 1;
-    }
-  });
-  if (count > 0) {
-    log.info(`  • class schemas: ${fmt(count, 'green')} written to ${fmt(schemasDir, 'dim')}`);
-  } else {
-    log.info('  • class schemas: none (no schemas defined)');
+    return dirs;
+  } catch (e) {
+    log.error(e.message);
+    log.summarizeAndExitIfNeeded();
+    return null;
   }
-  return count;
 }
 
-function writeInstances(metaDir, stackObjects, log) {
-  const instancesDir = path.join(metaDir, 'instances');
-  fs.mkdirSync(instancesDir, { recursive: true });
-  let count = 0;
-  stackObjects.filter(obj => obj && obj.id).forEach(obj => {
-    fs.writeFileSync(path.join(instancesDir, `${obj.id}.json`), JSON.stringify(obj, null, 2));
-    count += 1;
-  });
-  log.info(`  • instances: ${fmt(count, 'green')} written to ${fmt(instancesDir, 'dim')}`);
-  return count;
+function prepareBuildDir(buildDir, buildRoot, log) {
+  log.info(`  • target: ${fmt(buildDir, 'dim')}`);
+  cleanBuildDir(buildDir, buildRoot);
+  fs.mkdirSync(buildDir, { recursive: true });
+}
+
+function buildCanonicalBase(mode, { stackHash, buildDirName, buildRoot }) {
+  return {
+    canonicalVersion: CANONICAL.version,
+    canonicalStability: CANONICAL.stability,
+    breakingChangesWithoutVersionBump: CANONICAL.breakingChanges,
+    buildMeta: {
+      generatedAt: new Date().toISOString(),
+      mode,
+      stackHash,
+      buildDirName,
+      buildRoot
+    }
+  };
 }
 
 // --- Build commands ---
@@ -86,7 +70,7 @@ function runBuild(options) {
     classDirs: classDirInputs,
     instanceDirs: instanceDirInputs,
     templateDirs: templateDirInputs,
-    outputs = new Set(['canonical', 'class-definitions', 'schemas', 'validation', 'templates']),
+    outputs = new Set([OUTPUT_TYPES.CANONICAL, OUTPUT_TYPES.CLASS_DEFINITIONS, OUTPUT_TYPES.SCHEMAS, OUTPUT_TYPES.VALIDATION, OUTPUT_TYPES.TEMPLATES]),
     buildRoot: buildRootInput,
     buildDir: buildDirInput,
     buildName: buildNameInput,
@@ -97,37 +81,19 @@ function runBuild(options) {
     quiet = false
   } = options || {};
 
-  loadEnv(path.join(repoRoot, '.env'));
-  const log = createLogger({ quiet });
-  let classDirs, instanceDirs;
-  try {
-    classDirs = resolveStackDirs(classDirInputs);
-    instanceDirs = resolveStackDirs(instanceDirInputs);
-  } catch (e) {
-    log.error(e.message);
-    log.summarizeAndExitIfNeeded();
-    return;
-  }
-
-  if (!classDirs.length) {
-    log.error('At least one class source is required.');
-    return;
-  }
-  if (!instanceDirs.length) {
-    log.error('At least one instance source is required.');
-    return;
-  }
+  const log = initBuildEnv(quiet);
+  
+  const classDirs = resolveSourceDirs(classDirInputs, 'class', log);
+  if (!classDirs) return;
+  
+  const instanceDirs = resolveSourceDirs(instanceDirInputs, 'instance', log);
+  if (!instanceDirs) return;
 
   // Resolve template dirs: explicit --templates-from, or union of class/instance sources
   let templateDirs;
   if (templateDirInputs && templateDirInputs.length) {
-    try {
-      templateDirs = resolveStackDirs(templateDirInputs);
-    } catch (e) {
-      log.error(e.message);
-      log.summarizeAndExitIfNeeded();
-      return;
-    }
+    templateDirs = resolveSourceDirs(templateDirInputs, 'template', log);
+    if (!templateDirs) return;
   } else {
     templateDirs = [...new Set([...classDirs, ...instanceDirs])];
   }
@@ -146,7 +112,7 @@ function runBuild(options) {
   try {
     const templateEngine = createHandlebarsEngine({ stackDirs: templateDirs, log, quiet });
     log.info(`${step('Step 1/5')} ${fmt('Templates', 'cyan')}`);
-    templateDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} templates:${fmt(path.join(dir, 'templates'), 'dim')}`));
+    logSourceDirs(templateDirs, 'templates', log);
     const prepared = templateEngine.prepare();
     const templateStats = prepared && prepared.templateStats ? prepared.templateStats : templateEngine.templateStats;
     if (templateStats) {
@@ -154,8 +120,8 @@ function runBuild(options) {
     }
 
     log.info(`${step('Step 2/5')} ${fmt('Stack data', 'cyan')}`);
-    classDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} classes:  ${fmt(path.join(dir, 'classes'), 'dim')}`));
-    instanceDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} instances:${fmt(path.join(dir, 'instances'), 'dim')}`));
+    logSourceDirs(classDirs, 'classes', log);
+    logSourceDirs(instanceDirs, 'instances', log);
     const issues = createIssueCollector({ log, warningsAsErrors });
     const { stackObjects, instancesById, resolvedClasses, global } = loadStack({ stackDirs, classDirs, instanceDirs, log, issues });
     const stack = stackObjects;
@@ -169,22 +135,17 @@ function runBuild(options) {
     log.info(`  • validation: ${fmt(warnCount, warnCount ? 'yellow' : 'dim')} warnings, ${fmt(errorCount, errorCount ? 'yellow' : 'dim')} errors`);
 
     const buildHash = stackHashFromDirs(stackDirs);
-    const buildItemCount = stack.reduce((sum, obj) => sum + (Array.isArray(obj.build) ? obj.build.length : 0), 0);
+    const canonicalBase = buildCanonicalBase('full', { stackHash: buildHash, buildDirName: path.basename(buildDir), buildRoot });
     const canonical = {
-      canonicalVersion: CANONICAL_VERSION,
-      canonicalStability: CANONICAL_STABILITY,
-      breakingChangesWithoutVersionBump: true,
+      ...canonicalBase,
       buildMeta: {
-        generatedAt: new Date().toISOString(),
+        ...canonicalBase.buildMeta,
         classDirs,
         instanceDirs,
         templateDirs,
         classOrder: classDirs,
         instanceOrder: instanceDirs,
-        templateOrder: templateDirs,
-        stackHash: buildHash,
-        buildDirName: path.basename(buildDir),
-        buildRoot
+        templateOrder: templateDirs
       },
       global,
       classes: mapLikeToObject(resolvedClasses),
@@ -194,26 +155,25 @@ function runBuild(options) {
     };
     const services = createServices(canonical);
     const canonicalSnapshot = services.snapshot;
+    const buildItemCount = stack.reduce((sum, obj) => sum + (Array.isArray(obj.build) ? obj.build.length : 0), 0);
 
     log.info(`${step('Step 3/5')} ${fmt('Prepare build dir', 'cyan')}`);
-    log.info(`  • target: ${fmt(buildDir, 'dim')}`);
-    cleanBuildDir(buildDir, buildRoot);
-    fs.mkdirSync(buildDir, { recursive: true });
+    prepareBuildDir(buildDir, buildRoot, log);
 
     // Write outputs based on --output flags
     const metaDir = path.join(buildDir, 'meta');
-    if (outputs.has('canonical')) writeCanonical(buildDir, canonicalSnapshot, log);
-    if (outputs.has('validation')) writeValidation(metaDir, allIssues, log);
-    if (outputs.has('class-definitions')) writeClassDefinitions(metaDir, resolvedClasses, log);
-    if (outputs.has('schemas')) writeSchemas(metaDir, resolvedClasses, log);
-    if (outputs.has('instances')) writeInstances(metaDir, stackObjects, log);
+    if (outputs.has(OUTPUT_TYPES.CANONICAL)) writeCanonical(buildDir, canonicalSnapshot, log);
+    if (outputs.has(OUTPUT_TYPES.VALIDATION)) writeValidation(metaDir, allIssues, log);
+    if (outputs.has(OUTPUT_TYPES.CLASS_DEFINITIONS)) writeClassDefinitions(metaDir, resolvedClasses, log);
+    if (outputs.has(OUTPUT_TYPES.SCHEMAS)) writeSchemas(metaDir, resolvedClasses, log);
+    if (outputs.has(OUTPUT_TYPES.INSTANCES)) writeInstances(metaDir, stackObjects, log);
 
     if (validationResult.hasErrors) {
       log.error('Validation failed; skipping render.');
       return;
     }
 
-    if (!outputs.has('templates')) {
+    if (!outputs.has(OUTPUT_TYPES.TEMPLATES)) {
       log.info(`${step('Step 4/5')} ${fmt('Render outputs', 'cyan')} (skipped, not in --output)`);
       log.info(`${step('Step 5/5')} ${fmt('Complete', 'cyan')}`);
       log.info(`${fmt('Build succeeded', 'green')}`);
@@ -244,7 +204,7 @@ function runBuild(options) {
 function runClassesBuild(options) {
   const {
     classDirs: classDirInputs,
-    outputs = new Set(['canonical', 'class-definitions', 'schemas']),
+    outputs = new Set([OUTPUT_TYPES.CANONICAL, OUTPUT_TYPES.CLASS_DEFINITIONS, OUTPUT_TYPES.SCHEMAS]),
     buildRoot: buildRootInput,
     buildDir: buildDirInput,
     buildName: buildNameInput,
@@ -252,21 +212,9 @@ function runClassesBuild(options) {
     quiet = false
   } = options || {};
 
-  loadEnv(path.join(repoRoot, '.env'));
-  const log = createLogger({ quiet });
-  let classDirs;
-  try {
-    classDirs = resolveStackDirs(classDirInputs);
-  } catch (e) {
-    log.error(e.message);
-    log.summarizeAndExitIfNeeded();
-    return;
-  }
-
-  if (!classDirs.length) {
-    log.error('At least one class source is required.');
-    return;
-  }
+  const log = initBuildEnv(quiet);
+  const classDirs = resolveSourceDirs(classDirInputs, 'class', log);
+  if (!classDirs) return;
 
   const { buildRoot, buildDir } = resolveBuildPaths({
     buildRootInput,
@@ -280,38 +228,31 @@ function runClassesBuild(options) {
     const { loadResolvedClasses } = require('./class_loader');
 
     log.info(`${step('Step 1/2')} ${fmt('Load classes', 'cyan')}`);
-    classDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} classes:  ${fmt(path.join(dir, 'classes'), 'dim')}`));
+    logSourceDirs(classDirs, 'classes', log);
 
     const { resolvedClasses } = loadResolvedClasses(classDirs, log);
     log.info(`  • loaded ${fmt(resolvedClasses.size, 'green')} classes`);
 
     const buildHash = stackHashFromDirs(classDirs);
+    const canonicalBase = buildCanonicalBase('classes-only', { stackHash: buildHash, buildDirName: path.basename(buildDir), buildRoot });
     const canonical = {
-      canonicalVersion: CANONICAL_VERSION,
-      canonicalStability: CANONICAL_STABILITY,
-      breakingChangesWithoutVersionBump: true,
+      ...canonicalBase,
       buildMeta: {
-        generatedAt: new Date().toISOString(),
+        ...canonicalBase.buildMeta,
         classDirs,
-        classOrder: classDirs,
-        mode: 'classes-only',
-        stackHash: buildHash,
-        buildDirName: path.basename(buildDir),
-        buildRoot
+        classOrder: classDirs
       },
       classes: mapLikeToObject(resolvedClasses),
       classHierarchy: buildClassHierarchy(resolvedClasses)
     };
 
     log.info(`${step('Step 2/2')} ${fmt('Write outputs', 'cyan')}`);
-    log.info(`  • target: ${fmt(buildDir, 'dim')}`);
-    cleanBuildDir(buildDir, buildRoot);
-    fs.mkdirSync(buildDir, { recursive: true });
+    prepareBuildDir(buildDir, buildRoot, log);
 
     const metaDir = path.join(buildDir, 'meta');
-    if (outputs.has('canonical')) writeCanonical(buildDir, canonical, log);
-    if (outputs.has('class-definitions')) writeClassDefinitions(metaDir, resolvedClasses, log);
-    if (outputs.has('schemas')) writeSchemas(metaDir, resolvedClasses, log);
+    if (outputs.has(OUTPUT_TYPES.CANONICAL)) writeCanonical(buildDir, canonical, log);
+    if (outputs.has(OUTPUT_TYPES.CLASS_DEFINITIONS)) writeClassDefinitions(metaDir, resolvedClasses, log);
+    if (outputs.has(OUTPUT_TYPES.SCHEMAS)) writeSchemas(metaDir, resolvedClasses, log);
 
     log.info(`${fmt('Classes build succeeded', 'green')}`);
   } catch (e) {
@@ -327,53 +268,46 @@ function runValidate(options) {
   const {
     classDirs: classDirInputs,
     instanceDirs: instanceDirInputs,
-    outputs = new Set(['summary']),
+    outputs = new Set([OUTPUT_TYPES.SUMMARY]),
     warningsAsErrors = false,
     warnExtraFields = false,
     quiet = false
   } = options || {};
 
-  const outputJson = outputs.has('json');
+  const outputJson = outputs.has(OUTPUT_TYPES.JSON);
   // If outputting JSON, suppress log output to keep stdout clean
-  loadEnv(path.join(repoRoot, '.env'));
-  const log = createLogger({ quiet: quiet || outputJson });
+  const log = initBuildEnv(quiet || outputJson);
+
+  // Helper for JSON error output
+  const jsonError = (msg) => console.log(JSON.stringify({ error: msg, issues: [] }, null, 2));
 
   let classDirs, instanceDirs;
   try {
     classDirs = resolveStackDirs(classDirInputs);
     instanceDirs = resolveStackDirs(instanceDirInputs);
   } catch (e) {
-    if (outputJson) {
-      console.log(JSON.stringify({ error: e.message, issues: [] }, null, 2));
-    } else {
-      log.error(e.message);
-    }
+    if (outputJson) jsonError(e.message);
+    else log.error(e.message);
     log.summarizeAndExitIfNeeded();
     return;
   }
 
   if (!classDirs.length) {
     const msg = 'At least one --classes-from directory is required.';
-    if (outputJson) {
-      console.log(JSON.stringify({ error: msg, issues: [] }, null, 2));
-    } else {
-      log.error(msg);
-    }
+    if (outputJson) jsonError(msg);
+    else log.error(msg);
     return;
   }
   if (!instanceDirs.length) {
     const msg = 'At least one --instances-from directory is required.';
-    if (outputJson) {
-      console.log(JSON.stringify({ error: msg, issues: [] }, null, 2));
-    } else {
-      log.error(msg);
-    }
+    if (outputJson) jsonError(msg);
+    else log.error(msg);
     return;
   }
 
   try {
     log.info(`${step('Step 1/3')} ${fmt('Load classes', 'cyan')}`);
-    classDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} classes:  ${fmt(path.join(dir, 'classes'), 'dim')}`));
+    logSourceDirs(classDirs, 'classes', log);
     const issues = createIssueCollector({ log, warningsAsErrors });
 
     // Use a dummy stackDirs that covers both sources for loadStack compatibility
@@ -382,7 +316,7 @@ function runValidate(options) {
     log.info(`  • loaded ${fmt(resolvedClasses.size, 'green')} classes`);
 
     log.info(`${step('Step 2/3')} ${fmt('Load instances', 'cyan')}`);
-    instanceDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} instances:${fmt(path.join(dir, 'instances'), 'dim')}`));
+    logSourceDirs(instanceDirs, 'instances', log);
     const instanceCount = stackObjects.filter(obj => obj && obj.id && !isReservedId(obj.id)).length;
     log.info(`  • loaded ${fmt(instanceCount, 'green')} objects (+global)`);
 
@@ -393,7 +327,6 @@ function runValidate(options) {
     const errorCount = allIssues.filter(issue => issue.level === 'error').length;
 
     if (outputJson) {
-      // Output JSON to stdout
       console.log(JSON.stringify({
         passed: !validationResult.hasErrors,
         classDirs,
@@ -418,16 +351,12 @@ function runValidate(options) {
       }
     }
 
-    // Exit with error code if validation failed
     if (validationResult.hasErrors) {
       process.exitCode = 1;
     }
   } catch (e) {
-    if (outputJson) {
-      console.log(JSON.stringify({ error: e.message, issues: [] }, null, 2));
-    } else {
-      log.error(e.message);
-    }
+    if (outputJson) jsonError(e.message);
+    else log.error(e.message);
   } finally {
     log.summarizeAndExitIfNeeded();
   }
@@ -438,7 +367,7 @@ function runValidate(options) {
 function runInstancesBuild(options) {
   const {
     instanceDirs: instanceDirInputs,
-    outputs = new Set(['canonical']),
+    outputs = new Set([OUTPUT_TYPES.CANONICAL]),
     buildRoot: buildRootInput,
     buildDir: buildDirInput,
     buildName: buildNameInput,
@@ -446,21 +375,9 @@ function runInstancesBuild(options) {
     quiet = false
   } = options || {};
 
-  loadEnv(path.join(repoRoot, '.env'));
-  const log = createLogger({ quiet });
-  let instanceDirs;
-  try {
-    instanceDirs = resolveStackDirs(instanceDirInputs);
-  } catch (e) {
-    log.error(e.message);
-    log.summarizeAndExitIfNeeded();
-    return;
-  }
-
-  if (!instanceDirs.length) {
-    log.error('At least one instance source is required.');
-    return;
-  }
+  const log = initBuildEnv(quiet);
+  const instanceDirs = resolveSourceDirs(instanceDirInputs, 'instance', log);
+  if (!instanceDirs) return;
 
   const { buildRoot, buildDir } = resolveBuildPaths({
     buildRootInput,
@@ -472,24 +389,19 @@ function runInstancesBuild(options) {
 
   try {
     log.info(`${step('Step 1/2')} ${fmt('Load instances', 'cyan')}`);
-    instanceDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} instances:${fmt(path.join(dir, 'instances'), 'dim')}`));
+    logSourceDirs(instanceDirs, 'instances', log);
     const { stackObjects, instancesById, global } = loadInstancesOnly({ instanceDirs, log });
     const instanceCount = stackObjects.filter(obj => obj && obj.id && !isReservedId(obj.id)).length;
     log.info(`  • loaded ${fmt(instanceCount, 'green')} objects (+global)`);
 
     const buildHash = stackHashFromDirs(instanceDirs);
+    const canonicalBase = buildCanonicalBase('instances-only', { stackHash: buildHash, buildDirName: path.basename(buildDir), buildRoot });
     const canonical = {
-      canonicalVersion: CANONICAL_VERSION,
-      canonicalStability: CANONICAL_STABILITY,
-      breakingChangesWithoutVersionBump: true,
+      ...canonicalBase,
       buildMeta: {
-        generatedAt: new Date().toISOString(),
+        ...canonicalBase.buildMeta,
         instanceDirs,
-        instanceOrder: instanceDirs,
-        mode: 'instances-only',
-        stackHash: buildHash,
-        buildDirName: path.basename(buildDir),
-        buildRoot
+        instanceOrder: instanceDirs
       },
       global,
       instances: stackObjects.filter(Boolean),
@@ -497,13 +409,11 @@ function runInstancesBuild(options) {
     };
 
     log.info(`${step('Step 2/2')} ${fmt('Write outputs', 'cyan')}`);
-    log.info(`  • target: ${fmt(buildDir, 'dim')}`);
-    cleanBuildDir(buildDir, buildRoot);
-    fs.mkdirSync(buildDir, { recursive: true });
+    prepareBuildDir(buildDir, buildRoot, log);
 
     const metaDir = path.join(buildDir, 'meta');
-    if (outputs.has('canonical')) writeCanonical(buildDir, canonical, log);
-    if (outputs.has('instances')) writeInstances(metaDir, stackObjects, log);
+    if (outputs.has(OUTPUT_TYPES.CANONICAL)) writeCanonical(buildDir, canonical, log);
+    if (outputs.has(OUTPUT_TYPES.INSTANCES)) writeInstances(metaDir, stackObjects, log);
 
     log.info(`${fmt('Instances build succeeded', 'green')}`);
   } catch (e) {

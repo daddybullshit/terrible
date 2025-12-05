@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const glob = require('glob');
+const { ParseError, PathError } = require('./errors');
 
 // Compute line/column for a character index in a string.
 function positionToLineCol(text, index) {
@@ -24,34 +25,30 @@ function readJsonFile(filePath) {
       if (!Number.isNaN(index)) {
         const { line, column } = positionToLineCol(contents, index);
         const annotated = `${message} (at ${filePath}:${line}:${column})`;
-        const error = new Error(annotated);
-        error.cause = err;
-        throw error;
+        throw new ParseError(annotated, { filePath, line, column, cause: err });
       }
     }
-    const error = new Error(`Failed to parse JSON in ${filePath}: ${message}`);
-    error.cause = err;
-    throw error;
+    throw new ParseError(`Failed to parse JSON in ${filePath}: ${message}`, { filePath, cause: err });
   }
 }
 
 // Normalize and verify a directory path; resolves relative paths against CWD.
 function normalizeDirPath(dirInput) {
   if (!dirInput) {
-    throw new Error('Directory path is required.');
+    throw new PathError('Directory path is required.', { input: dirInput });
   }
   const abs = path.isAbsolute(dirInput)
     ? dirInput
     : path.resolve(process.cwd(), dirInput);
 
   if (!fs.existsSync(abs)) {
-    throw new Error(`Directory does not exist: ${dirInput} (resolved to ${abs})`);
+    throw new PathError(`Directory does not exist: ${dirInput} (resolved to ${abs})`, { input: dirInput, resolved: abs });
   }
 
   const real = fs.realpathSync(abs);
   const stat = fs.statSync(real);
   if (!stat.isDirectory()) {
-    throw new Error(`Path is not a directory: ${dirInput} (resolved to ${abs})`);
+    throw new PathError(`Path is not a directory: ${dirInput} (resolved to ${abs})`, { input: dirInput, resolved: abs });
   }
   return real;
 }
@@ -91,7 +88,7 @@ function scanDir(dir, { pattern = '**/*', absolute = true } = {}) {
 function findJsonFiles(dir, { required = false } = {}) {
   if (!dir || !fs.existsSync(dir)) {
     if (required) {
-      throw new Error(`Directory does not exist: ${dir}`);
+      throw new PathError(`Directory does not exist: ${dir}`, { dir });
     }
     return [];
   }
@@ -105,7 +102,7 @@ function findJsonFiles(dir, { required = false } = {}) {
   });
 
   if (required && matches.length === 0) {
-    throw new Error(`No JSON files found in ${dir}`);
+    throw new PathError(`No JSON files found in ${dir}`, { dir });
   }
 
   return sortByDepthThenName(matches, dir);

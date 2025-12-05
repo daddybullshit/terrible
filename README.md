@@ -6,7 +6,7 @@ Terrible turns JSON-defined stacks into real outputs. Provide classes, instances
 - Prerequisite: Node.js 18+.
 - Install once: `npm install` (or `npm ci`).
 - Build: `./bin/terrible build stacks/recipes` (add more stacks positionally or via `--stack`; use `--classes-from`/`--instances-from` to source data from specific stacks). Control outputs with `--build-root`, `--build-name`, `--build-dir`, and `--hash/--no-hash`. Relative stack paths resolve from your current working directory; if missing there we fall back to the repo root (and its parent, for private stacks). Outputs land in `build/<stack>-<hash>/` by default with a `canonical.json` snapshot.
-- Tests: `./bin/terrible test` runs the regression suite.
+- Tests: `npm test` runs unit + regression tests; `./bin/terrible test` runs regression only.
 - Helpful flags: `--warnings-as-errors`, `--warn-extra-fields`, `--fail-on-collisions`, `--quiet`. A root `.env` is loaded automatically if present.
 
 ## What Terrible gives you
@@ -23,9 +23,10 @@ Terrible turns JSON-defined stacks into real outputs. Provide classes, instances
 - Roadmap: `docs/roadmap.md`
 
 ## Repository layout
-- `js/core/`: shared helpers (canonical/data/utils, merge/object/fs helpers, services).
+- `js/core/`: shared helpers (canonical/data/utils, merge/object/fs helpers, services, structured errors).
 - `js/templates/`: template resolution/helpers, templating interfaces, Handlebars engine.
 - `js/`: build pipeline, loaders, CLI wiring.
 - `stacks/`: stack-specific classes/instances/templates.
+- `tests/`: unit tests (`core.test.js`) and regression tests (`regression.test.js`).
 - `docs/`: end-user documentation.
 - `build/`: generated outputs (safe to regenerate).
