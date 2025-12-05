@@ -3,9 +3,7 @@ const { deepMerge, mergeValue } = require('./core/merge_utils');
 const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
 const { parentsFor } = require('./core/canonical_helpers');
 const { asArray } = require('./core/object_utils');
-
-// --- Helpers ---
-const RESERVED_CLASS_KEYS = new Set(['class', 'parent', 'id', 'schema']);
+const { RESERVED_CLASS_KEYS } = require('./core/build_helpers');
 
 // Load class definitions and schemas into raw entries with provenance.
 // Supports:

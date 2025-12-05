@@ -3,26 +3,34 @@
 const path = require('path');
 const fs = require('fs');
 const { parentsFor } = require('./canonical_helpers');
+const { fmt, step } = require('./format');
 
 const repoRoot = path.join(__dirname, '..', '..');
-const colors = {
-  reset: '\x1b[0m',
-  bold: '\x1b[1m',
-  dim: '\x1b[2m',
-  cyan: '\x1b[36m',
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  magenta: '\x1b[35m'
-};
-const ENABLE_COLOR = process.stdout && process.stdout.isTTY && process.env.NO_COLOR !== '1' && process.env.FORCE_COLOR !== '0';
 
-function fmt(text, color) {
-  if (!ENABLE_COLOR || !color || !colors[color]) return text;
-  return `${colors[color]}${text}${colors.reset}`;
+// --- Reserved keys/ids (centralized to avoid duplication) ---
+
+/** Reserved instance IDs that have special meaning */
+const RESERVED_IDS = Object.freeze(['global']);
+
+/** Reserved keys on stack objects (instances) */
+const RESERVED_INSTANCE_KEYS = Object.freeze(new Set(['id', 'build', 'class']));
+
+/** Reserved keys on class definitions */
+const RESERVED_CLASS_KEYS = Object.freeze(new Set(['class', 'parent', 'id', 'schema']));
+
+/** Check if an instance ID is reserved */
+function isReservedId(id) {
+  return RESERVED_IDS.includes(id);
 }
 
-function step(label) {
-  return fmt(label, 'bold');
+/** Check if a key is reserved on stack objects */
+function isReservedInstanceKey(key) {
+  return RESERVED_INSTANCE_KEYS.has(key);
+}
+
+/** Check if a key is reserved on class definitions */
+function isReservedClassKey(key) {
+  return RESERVED_CLASS_KEYS.has(key);
 }
 
 // Load a .env file into process.env (best-effort; stays silent if missing).
@@ -38,11 +46,6 @@ function loadEnv(envPath = path.join(repoRoot, '.env')) {
       console.warn(`Warning: failed to load .env from ${envPath}: ${err.message}`);
     }
   }
-}
-
-// Identify whether an object id is reserved.
-function isReservedId(id) {
-  return id === 'global';
 }
 
 // Remove and recreate a build directory, ensuring it stays inside build root.
@@ -177,10 +180,15 @@ module.exports = {
   CANONICAL,
   cleanBuildDir,
   fmt,
+  isReservedClassKey,
   isReservedId,
+  isReservedInstanceKey,
   loadEnv,
   logSourceDirs,
   OUTPUT_TYPES,
+  RESERVED_CLASS_KEYS,
+  RESERVED_IDS,
+  RESERVED_INSTANCE_KEYS,
   step,
   writeCanonical,
   writeClassDefinitions,

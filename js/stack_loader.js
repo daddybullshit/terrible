@@ -3,14 +3,8 @@ const fs = require('fs');
 const { applyClassDefaults, loadResolvedClasses } = require('./class_loader');
 const { deepMerge } = require('./core/merge_utils');
 const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
-const { isReservedId } = require('./core/build_helpers');
+const { isReservedId, isReservedInstanceKey } = require('./core/build_helpers');
 const { asArray } = require('./core/object_utils');
-
-const RESERVED_KEYS = new Set(['id', 'build', 'class']);
-
-function isReservedKey(key) {
-  return RESERVED_KEYS.has(key);
-}
 
 // Build a map of stack objects (excluding global) exposing resolved properties.
 function buildObjectMap(stackObjects, resolvedClasses) {
@@ -22,13 +16,13 @@ function buildObjectMap(stackObjects, resolvedClasses) {
       const keys = new Set();
       if (classDef) {
         Object.keys(classDef).forEach(k => {
-          if (!isReservedKey(k)) {
+          if (!isReservedInstanceKey(k)) {
             keys.add(k);
           }
         });
       }
       Object.keys(obj).forEach(k => {
-        if (!isReservedKey(k)) {
+        if (!isReservedInstanceKey(k)) {
           keys.add(k);
         }
       });

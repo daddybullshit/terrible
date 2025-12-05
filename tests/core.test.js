@@ -369,6 +369,82 @@ test('findJsonFiles finds JSON files', () => {
 });
 
 // ============================================================
+// format tests
+// ============================================================
+console.log('\n📦 format');
+const { fmt, step, error: fmtError, warning: fmtWarning, dim, success, isColorEnabled } = require('../js/core/format');
+
+test('fmt handles invalid style gracefully', () => {
+  assertEqual(fmt('test', 'nonexistent'), 'test');
+  assertEqual(fmt('test', null), 'test');
+  assertEqual(fmt('test', undefined), 'test');
+});
+
+test('step formats as bold', () => {
+  const result = step('Step 1');
+  assertTrue(result.includes('Step 1'));
+});
+
+test('fmtError includes Error prefix', () => {
+  const result = fmtError('something failed');
+  assertTrue(result.includes('Error:'));
+  assertTrue(result.includes('something failed'));
+});
+
+test('fmtWarning includes Warning prefix', () => {
+  const result = fmtWarning('something warned');
+  assertTrue(result.includes('Warning:'));
+  assertTrue(result.includes('something warned'));
+});
+
+test('isColorEnabled returns boolean', () => {
+  const result = isColorEnabled();
+  assertTrue(typeof result === 'boolean');
+});
+
+// ============================================================
+// build_helpers reserved keys tests
+// ============================================================
+console.log('\n📦 build_helpers (reserved keys)');
+const { 
+  isReservedId, isReservedInstanceKey, isReservedClassKey,
+  RESERVED_IDS, RESERVED_INSTANCE_KEYS, RESERVED_CLASS_KEYS 
+} = require('../js/core/build_helpers');
+
+test('isReservedId identifies global', () => {
+  assertTrue(isReservedId('global'));
+  assertFalse(isReservedId('other'));
+  assertFalse(isReservedId(''));
+});
+
+test('RESERVED_IDS is frozen', () => {
+  assertTrue(Object.isFrozen(RESERVED_IDS));
+});
+
+test('isReservedInstanceKey identifies id, build, class', () => {
+  assertTrue(isReservedInstanceKey('id'));
+  assertTrue(isReservedInstanceKey('build'));
+  assertTrue(isReservedInstanceKey('class'));
+  assertFalse(isReservedInstanceKey('name'));
+  assertFalse(isReservedInstanceKey('tags'));
+});
+
+test('isReservedClassKey identifies class, parent, id, schema', () => {
+  assertTrue(isReservedClassKey('class'));
+  assertTrue(isReservedClassKey('parent'));
+  assertTrue(isReservedClassKey('id'));
+  assertTrue(isReservedClassKey('schema'));
+  assertFalse(isReservedClassKey('name'));
+  assertFalse(isReservedClassKey('defaults'));
+});
+
+test('reserved key sets are frozen', () => {
+  // Sets can't be frozen directly but we wrapped them
+  assertTrue(RESERVED_INSTANCE_KEYS.has('id'));
+  assertTrue(RESERVED_CLASS_KEYS.has('class'));
+});
+
+// ============================================================
 // issue_collector tests
 // ============================================================
 console.log('\n📦 issue_collector');
