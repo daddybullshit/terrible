@@ -75,25 +75,29 @@ function testStackPathsResolveWithCwdPriorityAndRepoFallback() {
   const temp = tempDir('terrible-cwd-');
   process.chdir(temp);
   try {
+    const parentStacks = path.resolve(temp, '../stacks');
+    fs.rmSync(parentStacks, { recursive: true, force: true });
+
     // Should fall back to repo root (or its parent) when cwd-relative path does not exist.
-    const fallback = resolveStackDir('../stacks/demo');
+    const fallback = resolveStackDir('../stacks/recipes');
     const expectedFallbacks = [
-      path.join(__dirname, '..', 'stacks', 'demo'),
-      path.join(__dirname, '..', '..', 'stacks', 'demo')
+      path.join(__dirname, '..', 'stacks', 'recipes'),
+      path.join(__dirname, '..', '..', 'stacks', 'recipes')
     ].filter(p => fs.existsSync(p));
-    assert.ok(expectedFallbacks.length > 0, 'expected demo stack to exist in repo or parent');
+    assert.ok(expectedFallbacks.length > 0, 'expected recipes stack to exist in repo or parent');
     assert.ok(expectedFallbacks.some(p => fallback === fs.realpathSync(p)), 'should fall back to repo or parent root for missing cwd path');
 
     // Should prefer cwd when it exists.
-    const localStacks = path.resolve(temp, '../stacks/demo');
+    const localStacks = path.resolve(temp, '../stacks/recipes');
     fs.mkdirSync(localStacks, { recursive: true });
-    const localResolved = resolveStackDir('../stacks/demo');
+    const localResolved = resolveStackDir('../stacks/recipes');
     assert.strictEqual(localResolved, fs.realpathSync(localStacks), 'should prefer cwd when path exists there');
 
     const absoluteStack = path.join(__dirname, '..', 'stacks', 'recipes');
     const normalized = resolveStackDir(absoluteStack);
     assert.strictEqual(normalized, fs.realpathSync(absoluteStack), 'absolute stack paths should resolve');
   } finally {
+    fs.rmSync(path.resolve(temp, '../stacks'), { recursive: true, force: true });
     process.chdir(originalCwd);
   }
 }

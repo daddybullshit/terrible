@@ -33,30 +33,11 @@ function loadEnv(envPath = path.join(repoRoot, '.env')) {
   try {
     const dotenv = require('dotenv');
     dotenv.config({ path: envPath });
-    return;
   } catch (err) {
     if (err && err.code !== 'MODULE_NOT_FOUND') {
       console.warn(`Warning: failed to load .env from ${envPath}: ${err.message}`);
     }
   }
-
-  // Fallback: minimal .env parser to avoid hard failure when dotenv is missing.
-  const contents = fs.readFileSync(envPath, 'utf8');
-  contents.split(/\r?\n/).forEach(line => {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) {
-      return;
-    }
-    const idx = trimmed.indexOf('=');
-    if (idx === -1) {
-      return;
-    }
-    const key = trimmed.slice(0, idx).trim();
-    const value = trimmed.slice(idx + 1).trim();
-    if (key && !Object.prototype.hasOwnProperty.call(process.env, key)) {
-      process.env[key] = value;
-    }
-  });
 }
 
 // Identify whether an object id is reserved.

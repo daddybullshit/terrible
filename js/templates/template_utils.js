@@ -95,7 +95,7 @@ function compileTemplate(templateKey, templateContent, log) {
 function renderTemplate(templateKey, templateContent, obj, instancesById, log, metaExtras = {}) {
   const compiled = compileTemplate(templateKey, templateContent, log);
   const globalObj = globalsFromInstances(instancesById) || {};
-  const { canonical } = metaExtras;
+  const { canonical, services } = metaExtras;
   const context = {
     ...globalObj,
     ...obj,
@@ -112,6 +112,7 @@ function renderTemplate(templateKey, templateContent, obj, instancesById, log, m
     instancesById,
     log,
     templateKey,
+    services,
     ...metaExtras
   };
 

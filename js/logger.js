@@ -17,6 +17,11 @@ function createLogger(options = {}) {
   return {
     warnings,
     errors,
+    info: (msg) => {
+      if (!quiet) {
+        console.log(msg);
+      }
+    },
     warn: (msg) => {
       warnings.push(msg);
       if (!quiet) {

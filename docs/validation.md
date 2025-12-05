@@ -3,9 +3,15 @@
 Terrible validates instances against their class schemas after merging defaults and inheritance. Validation is strict enough to catch bad data but configurable so you can decide which findings are fatal.
 
 ## Schemas
-- Each class may define a sidecar `<class>.schema.json`. Embedded schemas inside class JSON are disallowed; missing sidecars are treated as empty schemas and emitted to `meta/class-schemas/`.
+- Only sidecar files are allowed: `<class>.schema.json` lives next to the class file. A `schema` key inside a class JSON is a fatal error with file context.
+- Missing sidecars default to an empty schema; the build still emits `<class>.schema.json` under `build/<stack>-<hash>/meta/class-schemas/` for every class.
 - Schemas merge in the same deterministic order as class data and stack order. Multi-parent inheritance merges parent schemas first, then the child.
 - `global.class_schemas` (written under `build/<stack>-<hash>/meta/`) captures the effective schema per class for downstream consumers.
+
+### Schema severities
+- Invalid or un-compilable schemas are fatal errors (stops the build).
+- Schema validation failures are warnings by default; use `--warnings-as-errors` to make them fatal.
+- Extra fields are reported only when `--warn-extra-fields` is set; the check walks nested objects and `anyOf`/`oneOf`/`allOf` branches so deeply nested extras are still flagged.
 
 ## Validation behavior
 - Instances validate against the resolved schema for their class.

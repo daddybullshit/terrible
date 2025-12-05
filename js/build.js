@@ -48,8 +48,8 @@ function runBuild(options) {
   const instanceDirs = resolveDirs(instanceDirInputs, stackDirs);
 
   if (!stackDirs.length) {
-    console.error('At least one --stack is required.');
-    process.exit(1);
+    log.error('At least one --stack is required.');
+    return;
   }
 
   const { buildRoot, buildDir } = resolveBuildPaths({
@@ -62,36 +62,28 @@ function runBuild(options) {
 
   try {
     const templateEngine = createHandlebarsEngine({ stackDirs, log, quiet });
-    if (!quiet) {
-      console.log(`${step('Step 1/5')} ${fmt('Templates', 'cyan')}`);
-      stackDirs.forEach((dir, idx) => console.log(`  ${fmt(`${idx + 1}.`, 'dim')} stack:    ${fmt(path.join(dir, 'templates'), 'dim')}`));
-    }
+    log.info(`${step('Step 1/5')} ${fmt('Templates', 'cyan')}`);
+    stackDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} stack:    ${fmt(path.join(dir, 'templates'), 'dim')}`));
     const prepared = templateEngine.prepare();
     const templateStats = prepared && prepared.templateStats ? prepared.templateStats : templateEngine.templateStats;
-    if (!quiet && templateStats) {
-      console.log(`  • loaded ${fmt(templateStats.totalCount, 'green')} (overrides ${templateStats.overrideCount})`);
+    if (templateStats) {
+      log.info(`  • loaded ${fmt(templateStats.totalCount, 'green')} (overrides ${templateStats.overrideCount})`);
     }
 
-    if (!quiet) {
-      console.log(`${step('Step 2/5')} ${fmt('Stack data', 'cyan')}`);
-      classDirs.forEach((dir, idx) => console.log(`  ${fmt(`${idx + 1}.`, 'dim')} classes:  ${fmt(path.join(dir, 'classes'), 'dim')}`));
-      instanceDirs.forEach((dir, idx) => console.log(`  ${fmt(`${idx + 1}.`, 'dim')} instances:${fmt(path.join(dir, 'instances'), 'dim')}`));
-    }
+    log.info(`${step('Step 2/5')} ${fmt('Stack data', 'cyan')}`);
+    classDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} classes:  ${fmt(path.join(dir, 'classes'), 'dim')}`));
+    instanceDirs.forEach((dir, idx) => log.info(`  ${fmt(`${idx + 1}.`, 'dim')} instances:${fmt(path.join(dir, 'instances'), 'dim')}`));
     const issues = createIssueCollector({ log, warningsAsErrors });
     const { stackObjects, instancesById, resolvedClasses, global } = loadStack({ stackDirs, classDirs, instanceDirs, log, issues });
     const stack = stackObjects;
     const instanceCount = stackObjects.filter(obj => obj && obj.id && !isReservedId(obj.id)).length;
-    if (!quiet) {
-      console.log(`  • loaded ${fmt(instanceCount, 'green')} objects (+global)`);
-      console.log(`  • loaded ${fmt(resolvedClasses.size, 'green')} classes`);
-    }
+    log.info(`  • loaded ${fmt(instanceCount, 'green')} objects (+global)`);
+    log.info(`  • loaded ${fmt(resolvedClasses.size, 'green')} classes`);
     const validationResult = validateStack(stackObjects, resolvedClasses, { warningsAsErrors, warnExtraFields, log, issues });
     const allIssues = validationResult.issues;
     const warnCount = allIssues.filter(issue => issue.level === 'warn').length;
     const errorCount = allIssues.filter(issue => issue.level === 'error').length;
-    if (!quiet) {
-      console.log(`  • validation: ${fmt(warnCount, warnCount ? 'yellow' : 'dim')} warnings, ${fmt(errorCount, errorCount ? 'yellow' : 'dim')} errors`);
-    }
+    log.info(`  • validation: ${fmt(warnCount, warnCount ? 'yellow' : 'dim')} warnings, ${fmt(errorCount, errorCount ? 'yellow' : 'dim')} errors`);
 
     const buildHash = stackHashFromDirs(stackDirs);
     const buildItemCount = stack.reduce((sum, obj) => sum + (Array.isArray(obj.build) ? obj.build.length : 0), 0);
@@ -120,10 +112,8 @@ function runBuild(options) {
     const services = createServices(canonical);
     const canonicalSnapshot = services.snapshot;
 
-    if (!quiet) {
-      console.log(`${step('Step 3/5')} ${fmt('Prepare build dir', 'cyan')}`);
-      console.log(`  • target: ${fmt(buildDir, 'dim')}`);
-    }
+    log.info(`${step('Step 3/5')} ${fmt('Prepare build dir', 'cyan')}`);
+    log.info(`  • target: ${fmt(buildDir, 'dim')}`);
     cleanBuildDir(buildDir, buildRoot);
     fs.mkdirSync(buildDir, { recursive: true });
     fs.writeFileSync(path.join(buildDir, 'canonical.json'), JSON.stringify(canonicalSnapshot, null, 2));
@@ -152,37 +142,31 @@ function runBuild(options) {
         classSchemaCount += 1;
       }
     });
-    if (!quiet) {
-      console.log(`  • validation report: ${fmt(validationPath, 'dim')}`);
-      console.log(`  • class definitions: ${fmt(classDefCount, classDefCount ? 'green' : 'dim')} written to ${fmt(classDefsDir, 'dim')}`);
-      if (classSchemaCount > 0) {
-        console.log(`  • class schemas: ${fmt(classSchemaCount, 'green')} written to ${fmt(classSchemasDir, 'dim')}`);
-      } else {
-        console.log('  • class schemas: none (no schemas defined)');
-      }
+    log.info(`  • validation report: ${fmt(validationPath, 'dim')}`);
+    log.info(`  • class definitions: ${fmt(classDefCount, classDefCount ? 'green' : 'dim')} written to ${fmt(classDefsDir, 'dim')}`);
+    if (classSchemaCount > 0) {
+      log.info(`  • class schemas: ${fmt(classSchemaCount, 'green')} written to ${fmt(classSchemasDir, 'dim')}`);
+    } else {
+      log.info('  • class schemas: none (no schemas defined)');
     }
     if (validationResult.hasErrors) {
       log.error('Validation failed; skipping render.');
       return;
     }
 
-    if (!quiet) {
-      console.log(`${step('Step 4/5')} ${fmt('Render outputs', 'cyan')}`);
-      console.log(`  • items: ${fmt(buildItemCount, 'green')} across ${instanceCount} objects (+global)`);
-      console.log(`  • root:  ${fmt(buildDir, 'dim')}`);
-    }
+    log.info(`${step('Step 4/5')} ${fmt('Render outputs', 'cyan')}`);
+    log.info(`  • items: ${fmt(buildItemCount, 'green')} across ${instanceCount} objects (+global)`);
+    log.info(`  • root:  ${fmt(buildDir, 'dim')}`);
     const renderResult = templateEngine.renderAll({ snapshot: canonicalSnapshot, buildDir, failOnCollisions, canonical: canonicalSnapshot, services });
     if (renderResult.collisionFatal) {
       return;
     }
     const renderedCount = renderResult.renderedCount || 0;
 
-    if (!quiet) {
-      console.log(`${step('Step 5/5')} ${fmt('Complete', 'cyan')}`);
-      console.log(`  • rendered: ${fmt(renderedCount, 'green')} outputs`);
-      console.log(`  • canonical: ${fmt(path.join(buildDir, 'canonical.json'), 'dim')}`);
-      console.log(`${fmt('Build succeeded', 'green')}`);
-    }
+    log.info(`${step('Step 5/5')} ${fmt('Complete', 'cyan')}`);
+    log.info(`  • rendered: ${fmt(renderedCount, 'green')} outputs`);
+    log.info(`  • canonical: ${fmt(path.join(buildDir, 'canonical.json'), 'dim')}`);
+    log.info(`${fmt('Build succeeded', 'green')}`);
   } catch (e) {
     log.error(e.message);
   } finally {

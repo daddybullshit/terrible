@@ -1,6 +1,7 @@
 const path = require('path');
 const { deepMerge, mergeValue } = require('./core/merge_utils');
 const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
+const { parentsFor } = require('./core/canonical_helpers');
 
 // Load class definitions and schemas into raw entries with provenance.
 // Supports:
@@ -128,27 +129,6 @@ function mergeClassDefinitions(classDirs, log) {
   });
 
   return classMap;
-}
-
-function parentsFor(def) {
-  if (!def || typeof def !== 'object') {
-    return [];
-  }
-  const out = [];
-  const add = val => {
-    if (!val) return;
-    if (Array.isArray(val)) {
-      val.forEach(add);
-      return;
-    }
-    const key = String(val);
-    if (!out.includes(key)) {
-      out.push(key);
-    }
-  };
-  add(def.parent);
-  add(def.parents);
-  return out;
 }
 
 // Recursively resolve inheritance for a class, caching results.

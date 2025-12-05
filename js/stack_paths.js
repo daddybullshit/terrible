@@ -23,8 +23,12 @@ function normalizeStackDir(stackDirInput) {
   if (path.isAbsolute(stackDirInput)) {
     candidates.push(stackDirInput);
   } else {
+    const sanitized = stackDirInput.replace(/^(\.\.\/)+/, '');
     candidates.push(path.resolve(process.cwd(), stackDirInput));
     candidates.push(path.resolve(repoRoot, stackDirInput));
+    if (sanitized && sanitized !== stackDirInput) {
+      candidates.push(path.resolve(repoRoot, sanitized));
+    }
     candidates.push(path.resolve(repoRoot, '..', stackDirInput));
   }
   const attempts = new Set();

@@ -6,7 +6,7 @@ const { loadTemplates, renderTemplate, resolveOutputPath } = require('./template
 const { createLogger } = require('../logger');
 
 function writeTemplate(templateKey, filename, templates, buildDir, obj, instancesById, log, seenOutputs, options = {}) {
-  const { failOnCollisions = false, collisionState, canonical } = options;
+  const { failOnCollisions = false, collisionState, canonical, services } = options;
   const collision = (message) => {
     if (failOnCollisions) {
       if (collisionState) collisionState.fatal = true;
@@ -34,7 +34,7 @@ function writeTemplate(templateKey, filename, templates, buildDir, obj, instance
     obj,
     instancesById,
     log,
-    { buildDir, outputs, canonical }
+    { buildDir, outputs, canonical, services }
   );
   if (seenOutputs) {
     if (seenOutputs.has(outPath)) {
@@ -135,20 +135,18 @@ function createHandlebarsEngine({ stackDirs, log, quiet }) {
     instances
       .filter(obj => Array.isArray(obj.build) && obj.build.length > 0)
       .forEach(obj => {
-        if (!quiet) {
-          console.log(`  - process ${obj.id}`);
-        }
+        logger.info(`  - process ${obj.id}`);
         obj.build.forEach(buildItem => {
           if (typeof buildItem === 'string') {
             const ext = path.extname(buildItem);
             const filename = obj.id + ext;
-            writeTemplate(buildItem, filename, templates, buildDir, obj, instancesById, logger, outputPaths, { failOnCollisions, collisionState, canonical });
+            writeTemplate(buildItem, filename, templates, buildDir, obj, instancesById, logger, outputPaths, { failOnCollisions, collisionState, canonical, services });
             renderedCount += 1;
             return;
           }
           if (typeof buildItem === 'object' && buildItem !== null) {
             Object.entries(buildItem).forEach(([templateKey, filename]) => {
-              writeTemplate(templateKey, filename, templates, buildDir, obj, instancesById, logger, outputPaths, { failOnCollisions, collisionState, canonical });
+              writeTemplate(templateKey, filename, templates, buildDir, obj, instancesById, logger, outputPaths, { failOnCollisions, collisionState, canonical, services });
               renderedCount += 1;
             });
             return;
