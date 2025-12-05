@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const { applyClassDefaults, loadResolvedClasses } = require('./class_loader');
-const { deepMerge } = require('./core/merge_utils');
+const { deepMerge, unwrapResets } = require('./core/merge_utils');
 const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
 const { isReservedId, isReservedInstanceKey } = require('./core/build_helpers');
 const { asArray } = require('./core/object_utils');
@@ -189,7 +189,8 @@ function mergeInstanceFiles(roots, log) {
         mergedObj.id = obj.id;
         merged.set(obj.id, mergedObj);
       } else {
-        merged.set(obj.id, obj);
+        // First occurrence - unwrap any $reset objects
+        merged.set(obj.id, unwrapResets(obj));
       }
     });
   });

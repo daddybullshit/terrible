@@ -18,9 +18,9 @@ const repoRoot = path.join(__dirname, '..');
 
 // --- Build initialization helpers ---
 
-function initBuildEnv(quiet) {
+function initBuildEnv({ quiet, silent } = {}) {
   loadEnv(path.join(repoRoot, '.env'));
-  return createLogger({ quiet });
+  return createLogger({ quiet, silent });
 }
 
 /**
@@ -86,10 +86,11 @@ function runBuild(options) {
     warningsAsErrors = false,
     warnExtraFields = false,
     failOnCollisions = false,
-    quiet = false
+    quiet = false,
+    silent = false
   } = options || {};
 
-  const log = initBuildEnv(quiet);
+  const log = initBuildEnv({ quiet, silent });
   
   const classDirs = resolveSourceDirs(classDirInputs, 'class', log);
   if (!classDirs) return;
@@ -217,10 +218,11 @@ function runClassesBuild(options) {
     buildDir: buildDirInput,
     buildName: buildNameInput,
     includeHash = true,
-    quiet = false
+    quiet = false,
+    silent = false
   } = options || {};
 
-  const log = initBuildEnv(quiet);
+  const log = initBuildEnv({ quiet, silent });
   const classDirs = resolveSourceDirs(classDirInputs, 'class', log);
   if (!classDirs) return;
 
@@ -279,12 +281,13 @@ function runValidate(options) {
     outputs = new Set([OUTPUT_TYPES.SUMMARY]),
     warningsAsErrors = false,
     warnExtraFields = false,
-    quiet = false
+    quiet = false,
+    silent = false
   } = options || {};
 
   const outputJson = outputs.has(OUTPUT_TYPES.JSON);
   // If outputting JSON, suppress log output to keep stdout clean
-  const log = initBuildEnv(quiet || outputJson);
+  const log = initBuildEnv({ quiet: quiet || outputJson, silent });
 
   // Helper for JSON error output
   const jsonError = (msg) => console.log(JSON.stringify({ error: msg, issues: [] }, null, 2));
@@ -380,10 +383,11 @@ function runInstancesBuild(options) {
     buildDir: buildDirInput,
     buildName: buildNameInput,
     includeHash = true,
-    quiet = false
+    quiet = false,
+    silent = false
   } = options || {};
 
-  const log = initBuildEnv(quiet);
+  const log = initBuildEnv({ quiet, silent });
   const instanceDirs = resolveSourceDirs(instanceDirInputs, 'instance', log);
   if (!instanceDirs) return;
 

@@ -48,6 +48,7 @@ function runBuildWithStacks(stackDirs, opts = {}) {
     buildName,
     includeHash: false,
     quiet: true,
+    silent: true,
     warningsAsErrors: true
   });
   return readCanonical(buildRoot, buildName);
@@ -304,6 +305,92 @@ function testInstancesOnlyBuild() {
   assert.ok(!fs.existsSync(validationPath), 'instances-only should NOT have validation report');
 }
 
+function testArrayResetMerge() {
+  const validationStack = path.join(__dirname, '..', 'stacks', 'validation-suite');
+  const buildRoot = tempDir('terrible-reset-test-');
+  const buildName = 'reset-test';
+
+  runBuild({
+    classDirs: [validationStack],
+    instanceDirs: [validationStack],
+    buildRoot,
+    buildName,
+    includeHash: false,
+    quiet: true,
+    silent: true
+  });
+
+  const canonical = readCanonical(buildRoot, buildName);
+  const resetArticle = canonical.instancesById.article_reset_tags;
+
+  // $reset should replace the array, not append
+  assert.ok(resetArticle, 'article_reset_tags should exist');
+  assert.deepStrictEqual(
+    resetArticle.tags,
+    ['custom-tag', 'replacement'],
+    '$reset should replace array with value, not append'
+  );
+}
+
+function testWarnExtraFieldsFlag() {
+  const validationStack = path.join(__dirname, '..', 'stacks', 'validation-suite');
+  const buildRoot = tempDir('terrible-extra-test-');
+  const buildName = 'extra-test';
+
+  // Build with --warn-extra-fields; should NOT throw (warnings only)
+  runBuild({
+    classDirs: [validationStack],
+    instanceDirs: [validationStack],
+    buildRoot,
+    buildName,
+    includeHash: false,
+    quiet: true,
+    silent: true,
+    warnExtraFields: true,
+    warningsAsErrors: false
+  });
+
+  // Check validation report for extra field warnings
+  const validationPath = path.join(buildRoot, buildName, 'meta', 'validation.json');
+  assert.ok(fs.existsSync(validationPath), 'validation report should exist');
+  const validation = JSON.parse(fs.readFileSync(validationPath, 'utf8'));
+  
+  // Should have warnings for extra fields (code: extra_fields)
+  const extraFieldWarnings = (validation.issues || []).filter(w => 
+    w.code === 'extra_fields' || w.message?.includes('Extra fields')
+  );
+  assert.ok(extraFieldWarnings.length > 0, 'should have warnings for extra fields');
+}
+
+function testWarningsAsErrorsFlag() {
+  const validationStack = path.join(__dirname, '..', 'stacks', 'validation-suite');
+  const buildRoot = tempDir('terrible-warn-error-test-');
+  const buildName = 'warn-error-test';
+
+  // Run build in subprocess since it calls process.exit on errors
+  const { execSync } = require('child_process');
+  const binPath = path.join(__dirname, '..', 'bin', 'terrible');
+  
+  try {
+    execSync(`"${binPath}" build "${validationStack}" --build-root "${buildRoot}" --build-name "${buildName}" --no-hash --quiet --warn-extra-fields --warnings-as-errors`, {
+      stdio: 'pipe'
+    });
+    assert.fail('Expected build to fail with warnings-as-errors');
+  } catch (err) {
+    // Expected - build should fail
+    assert.ok(err.status !== 0, 'Build should exit with non-zero status');
+  }
+
+  // Check validation report for errors (warnings promoted to errors)
+  const validationPath = path.join(buildRoot, buildName, 'meta', 'validation.json');
+  assert.ok(fs.existsSync(validationPath), 'validation report should exist');
+  const validation = JSON.parse(fs.readFileSync(validationPath, 'utf8'));
+  
+  // With warnings-as-errors, extra field warnings should be errors
+  const errorCount = (validation.issues || []).filter(i => i.level === 'error').length;
+  assert.ok(errorCount > 0, '--warnings-as-errors should promote warnings to errors');
+}
+
 function run() {
   console.log('Running regression: instances include global + ordering...');
   testInstancesIncludeGlobalAndOrdering();
@@ -327,6 +414,12 @@ function run() {
   testGoldenClassesBuild();
   console.log('Running regression: golden instances build output...');
   testGoldenInstancesBuild();
+  console.log('Running regression: $reset array merge...');
+  testArrayResetMerge();
+  console.log('Running regression: --warn-extra-fields flag...');
+  testWarnExtraFieldsFlag();
+  console.log('Running regression: --warnings-as-errors flag...');
+  testWarningsAsErrorsFlag();
   console.log('All regression tests passed.');
 }
 

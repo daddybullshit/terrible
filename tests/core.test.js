@@ -47,7 +47,7 @@ function assertThrows(fn, msg = 'Expected to throw') {
 }
 
 // --- Load modules under test ---
-const { isPlainObject, arrayResetValue, mergeArrays, deepMerge, mergeValue } = require('../js/core/merge_utils');
+const { isPlainObject, arrayResetValue, mergeArrays, deepMerge, mergeValue, unwrapResets } = require('../js/core/merge_utils');
 const { asArray, mapLikeToObject } = require('../js/core/object_utils');
 const { getByPath, toArray, entriesFrom, filterList, targetIncludes } = require('../js/core/data_utils');
 const { TerribleError, ConfigError, PathError, ParseError, ValidationError, MergeError, TemplateError } = require('../js/core/errors');
@@ -127,6 +127,12 @@ test('deepMerge ignores undefined values', () => {
   assertEqual(deepMerge({ a: 1 }, { a: undefined }), { a: 1 });
 });
 
+test('deepMerge unwraps $reset on new fields', () => {
+  const base = { a: 1 };
+  const override = { tags: { $reset: true, value: ['new', 'tags'] } };
+  assertEqual(deepMerge(base, override), { a: 1, tags: ['new', 'tags'] });
+});
+
 test('mergeValue returns default when override undefined', () => {
   assertEqual(mergeValue(5, undefined), 5);
 });
@@ -137,6 +143,32 @@ test('mergeValue replaces with override', () => {
 
 test('mergeValue merges nested objects', () => {
   assertEqual(mergeValue({ a: 1 }, { b: 2 }), { a: 1, b: 2 });
+});
+
+test('unwrapResets handles primitives', () => {
+  assertEqual(unwrapResets(42), 42);
+  assertEqual(unwrapResets('hello'), 'hello');
+  assertEqual(unwrapResets(null), null);
+});
+
+test('unwrapResets unwraps $reset objects', () => {
+  const input = { $reset: true, value: ['a', 'b'] };
+  assertEqual(unwrapResets(input), ['a', 'b']);
+});
+
+test('unwrapResets recursively unwraps nested $reset', () => {
+  const input = {
+    name: 'test',
+    tags: { $reset: true, value: ['x'] },
+    nested: {
+      items: { $reset: true, value: [1, 2] }
+    }
+  };
+  assertEqual(unwrapResets(input), {
+    name: 'test',
+    tags: ['x'],
+    nested: { items: [1, 2] }
+  });
 });
 
 // ============================================================

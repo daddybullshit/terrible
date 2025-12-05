@@ -56,6 +56,12 @@ function deepMerge(base = {}, override = {}) {
       result[key] = deepMerge(baseVal, value);
       return;
     }
+    // Handle $reset on fields that don't exist in base
+    const reset = arrayResetValue(value);
+    if (reset !== null) {
+      result[key] = [...reset];
+      return;
+    }
     result[key] = value;
   });
   return result;
@@ -79,10 +85,31 @@ function mergeValue(defaultValue, overrideValue) {
   return overrideValue;
 }
 
+// Recursively unwrap any remaining $reset objects in a value.
+// Used for objects that were never merged (first occurrence).
+function unwrapResets(value) {
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+  const reset = arrayResetValue(value);
+  if (reset !== null) {
+    return [...reset];
+  }
+  if (Array.isArray(value)) {
+    return value.map(unwrapResets);
+  }
+  const result = {};
+  for (const [key, val] of Object.entries(value)) {
+    result[key] = unwrapResets(val);
+  }
+  return result;
+}
+
 module.exports = {
   arrayResetValue,
   isPlainObject,
   mergeArrays,
   deepMerge,
-  mergeValue
+  mergeValue,
+  unwrapResets
 };
