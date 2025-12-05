@@ -103,7 +103,7 @@ function renderTemplate(templateKey, templateContent, obj, instancesById, log, m
     instances: mapLikeToObject(instancesById),
     instancesById: mapLikeToObject(instancesById),
     objects: globalObj.objects,
-    classes: globalObj.classes,
+    classesById: globalObj.classesById,
     canonical
   };
 

@@ -157,7 +157,8 @@ function runBuild(options) {
         templateOrder: templateDirs
       },
       global,
-      classes: mapLikeToObject(resolvedClasses),
+      classes: Array.from(resolvedClasses.values()),
+      classesById: mapLikeToObject(resolvedClasses),
       classHierarchy: buildClassHierarchy(resolvedClasses),
       instances: stackObjects.filter(Boolean),
       instancesById: mapLikeToObject(instancesById)
@@ -252,7 +253,8 @@ function runClassesBuild(options) {
         classDirs,
         classOrder: classDirs
       },
-      classes: mapLikeToObject(resolvedClasses),
+      classes: Array.from(resolvedClasses.values()),
+      classesById: mapLikeToObject(resolvedClasses),
       classHierarchy: buildClassHierarchy(resolvedClasses)
     };
 

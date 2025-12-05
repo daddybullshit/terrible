@@ -59,7 +59,7 @@ function classInheritsFrom(classes, childId, ancestorId) {
 
 function filterInstancesByClass(canonical, classId) {
   if (!canonical.instances) return [];
-  return canonical.instances.filter(inst => classInheritsFrom(canonical.classes, inst.class, classId));
+  return canonical.instances.filter(inst => classInheritsFrom(canonical.classesById, inst.class, classId));
 }
 
 function mergedSchemaFor(classes, classId) {

@@ -10,7 +10,7 @@ Templates are standard Handlebars files with a `resolve` helper that understands
 ## Context and placeholder resolution
 - Raw `{{key}}`/`{{key|default}}` are rewritten to `{{resolve ...}}`.
 - Resolution order: helper/block context → current object → `global` → environment variables (raw then uppercased) → provided default → unresolved (warn).
-- Context aliases available in templates: `global`, `objects` (`global.objects`), `classes` (`global.classes`), `instances`/`instancesById` (plain map of all objects, including `global`), and `canonical` on global builds.
+- Context aliases available in templates: `global`, `objects` (`global.objects`), `classesById` (`global.classesById`), `instances`/`instancesById` (plain map of all objects, including `global`), and `canonical` on global builds.
 - Cross-object lookups work with dotted keys: `{{otherId.field}}` warns if missing.
 
 ## Build items and output paths

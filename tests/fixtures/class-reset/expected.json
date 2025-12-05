@@ -1,0 +1,16 @@
+{
+  "expected": {
+    "classes": {
+      "base": {
+        "tags": ["inherited", "from-base"]
+      },
+      "child": {
+        "tags": ["child-only"]
+      },
+      "standalone": {
+        "items": ["standalone-item"]
+      }
+    }
+  },
+  "description": "$reset in class definitions should unwrap to plain arrays - both for inheritance merges and first-occurrence standalone classes"
+}

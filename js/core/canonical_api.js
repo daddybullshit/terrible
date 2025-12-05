@@ -61,11 +61,14 @@ function createMutator(initialCanonical, { validate } = {}) {
 
   function upsertClass(def) {
     assertHasId(def, 'class');
-    working.classes[def.id] = { ...working.classes[def.id], ...def };
+    working.classesById[def.id] = { ...working.classesById[def.id], ...def };
+    // Rebuild classes array
+    working.classes = Object.values(working.classesById);
   }
 
   function removeClass(id) {
-    delete working.classes[id];
+    delete working.classesById[id];
+    working.classes = Object.values(working.classesById);
   }
 
   function setGlobal(update) {
@@ -105,8 +108,8 @@ function createReadOnlyView(canonical) {
 
   const getInstance = (id) => snapshot.instancesById[id] || null;
   const listInstances = () => snapshot.instances.slice();
-  const getClass = (id) => snapshot.classes[id] || null;
-  const listClasses = () => Object.values(snapshot.classes || {});
+  const getClass = (id) => snapshot.classesById[id] || null;
+  const listClasses = () => snapshot.classes.slice();
   const findByClass = (classId) => snapshot.instances.filter((inst) => inst.class === classId);
 
   return {

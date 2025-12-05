@@ -61,7 +61,7 @@ function attachGlobalMetadata(merged, objectMap, classesData) {
   const base = merged.get('global') || { id: 'global', build: [] };
   const updated = { ...base };
   updated.objects = objectMap;
-  updated.classes = classesData.map;
+  updated.classesById = classesData.map;
   updated.classEntries = classesData.entries;
   updated.id = 'global';
   return updated;

@@ -1,0 +1,5 @@
+{
+  "class": "base",
+  "description": "Base class with tags to be reset",
+  "tags": ["inherited", "from-base"]
+}

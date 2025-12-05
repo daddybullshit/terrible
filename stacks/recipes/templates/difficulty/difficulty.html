@@ -17,7 +17,7 @@
   <main class="content container">
     <div class="grid card-grid">
       {{#each entries}}
-        {{#if (inherits class "recipe" @root.classes)}}
+        {{#if (inherits class "recipe" @root.classesById)}}
           <article class="card">
             <div class="card__header">
               <p class="pill pill--accent"><a class="pill-link" href="{{lookup properties "difficulty"}}.html">{{lookup properties "difficulty"}}</a></p>

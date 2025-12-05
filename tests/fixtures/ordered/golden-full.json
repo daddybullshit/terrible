@@ -12,7 +12,15 @@
     "stack": "b",
     "note": "second"
   },
-  "classes": {
+  "classes": [
+    {
+      "class": "item",
+      "from": "stack-b",
+      "defaults": "a",
+      "extra": true
+    }
+  ],
+  "classesById": {
     "item": {
       "class": "item",
       "from": "stack-b",
@@ -30,14 +38,54 @@
   ],
   "instances": [
     {
-      "id": "global"
+      "id": "global",
+      "build": [],
+      "stack": "b",
+      "note": "second",
+      "objects": {
+        "alpha": {
+          "id": "alpha",
+          "class": "item",
+          "properties": {
+            "defaults": "a",
+            "extra": true,
+            "from": "stack-b",
+            "tags": [
+              "t1",
+              "t2"
+            ],
+            "val": "b"
+          }
+        }
+      },
+      "classesById": {
+        "item": {
+          "from": "stack-b",
+          "defaults": "a",
+          "extra": true
+        }
+      },
+      "classEntries": [
+        {
+          "class": "item",
+          "parent": null,
+          "properties": {
+            "from": "stack-b",
+            "defaults": "a",
+            "extra": true
+          }
+        }
+      ]
     },
     {
       "id": "alpha",
       "class": "item",
       "val": "b",
       "build": [],
-      "tags": ["t1", "t2"],
+      "tags": [
+        "t1",
+        "t2"
+      ],
       "from": "stack-b",
       "defaults": "a",
       "extra": true
@@ -48,12 +96,54 @@
       "id": "alpha",
       "class": "item",
       "val": "b",
-      "tags": ["t1", "t2"]
+      "build": [],
+      "tags": [
+        "t1",
+        "t2"
+      ],
+      "from": "stack-b",
+      "defaults": "a",
+      "extra": true
     },
     "global": {
       "id": "global",
+      "build": [],
       "stack": "b",
-      "note": "second"
+      "note": "second",
+      "objects": {
+        "alpha": {
+          "id": "alpha",
+          "class": "item",
+          "properties": {
+            "defaults": "a",
+            "extra": true,
+            "from": "stack-b",
+            "tags": [
+              "t1",
+              "t2"
+            ],
+            "val": "b"
+          }
+        }
+      },
+      "classesById": {
+        "item": {
+          "from": "stack-b",
+          "defaults": "a",
+          "extra": true
+        }
+      },
+      "classEntries": [
+        {
+          "class": "item",
+          "parent": null,
+          "properties": {
+            "from": "stack-b",
+            "defaults": "a",
+            "extra": true
+          }
+        }
+      ]
     }
   }
 }

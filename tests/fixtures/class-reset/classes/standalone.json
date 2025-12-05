@@ -1,0 +1,8 @@
+{
+  "class": "standalone",
+  "description": "Standalone class with $reset - first occurrence (no parent)",
+  "items": {
+    "$reset": true,
+    "value": ["standalone-item"]
+  }
+}

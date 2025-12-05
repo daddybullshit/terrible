@@ -1,5 +1,5 @@
 const path = require('path');
-const { deepMerge, mergeValue } = require('./core/merge_utils');
+const { deepMerge, mergeValue, unwrapResets } = require('./core/merge_utils');
 const { findJsonFiles, readJsonFile } = require('./core/fs_utils');
 const { parentsFor } = require('./core/canonical_helpers');
 const { asArray } = require('./core/object_utils');
@@ -145,6 +145,7 @@ function resolveClass(name, classMap, memo, stack, path, log) {
     }
   });
   resolved = deepMerge(resolved, def);
+  resolved = unwrapResets(resolved);  // Unwrap any remaining $reset after all merging
   memo.set(name, resolved);
   stack.delete(name);
   return resolved;

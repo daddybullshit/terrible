@@ -37,7 +37,7 @@
   <main class="content container">
     <section class="grid card-grid">
       {{#each (values objects)}}
-        {{#if (inherits (lookup this "class") "recipe" @root.classes)}}
+        {{#if (inherits (lookup this "class") "recipe" @root.classesById)}}
           <article class="card">
            {{#with (lookup this "properties") as |props|}}
              <div class="card__header">

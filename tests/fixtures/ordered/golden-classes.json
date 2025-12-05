@@ -1,12 +1,19 @@
 {
   "canonicalVersion": "0.0.0-alpha",
-  "canonicalStability": "experimental", 
+  "canonicalStability": "experimental",
   "breakingChangesWithoutVersionBump": true,
   "buildMeta": {
     "mode": "classes-only",
     "buildDirName": "classes"
   },
-  "classes": {
+  "classes": [
+    {
+      "class": "item",
+      "from": "stack-a",
+      "defaults": "a"
+    }
+  ],
+  "classesById": {
     "item": {
       "class": "item",
       "from": "stack-a",

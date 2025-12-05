@@ -182,32 +182,32 @@ function registerHelpers(handlebars, { metaFromOptions: metaFn = templateResolut
 
   // Schema-aware helpers (inheritance-aware).
   handlebars.registerHelper('schema_required', function schemaRequiredHelper(className, prop, classesObj) {
-    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    const classes = classesObj || (this && this.classesById) || (this && this.global && this.global.classesById);
     return schemaRequires(className, prop, classes);
   });
 
   handlebars.registerHelper('schema_has', function schemaHasHelper(className, prop, classesObj) {
-    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    const classes = classesObj || (this && this.classesById) || (this && this.global && this.global.classesById);
     return schemaHasProp(className, prop, classes);
   });
 
   handlebars.registerHelper('schema_props', function schemaPropsHelper(className, classesObj) {
-    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    const classes = classesObj || (this && this.classesById) || (this && this.global && this.global.classesById);
     return schemaProperties(className, classes);
   });
 
   handlebars.registerHelper('schema_prop_source', function schemaPropSourceHelper(className, prop, classesObj) {
-    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    const classes = classesObj || (this && this.classesById) || (this && this.global && this.global.classesById);
     return schemaPropertySource(className, prop, classes) || '';
   });
 
   handlebars.registerHelper('class_lineage', function classLineageHelper(className, classesObj) {
-    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    const classes = classesObj || (this && this.classesById) || (this && this.global && this.global.classesById);
     return classLineage(className, classes);
   });
 
   handlebars.registerHelper('schema_required_by_source', function schemaRequiredBySourceHelper(className, classesObj) {
-    const classes = classesObj || (this && this.classes) || (this && this.global && this.global.classes);
+    const classes = classesObj || (this && this.classesById) || (this && this.global && this.global.classesById);
     return requiredFieldsBySource(className, classes);
   });
 

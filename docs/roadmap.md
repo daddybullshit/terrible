@@ -8,7 +8,7 @@ This roadmap summarizes the planned evolution of the build system and template t
 - `global` supports `build` entries, drives placeholder resolution, and exposes `global.objects` (keyed map) for templates; helpers such as `values`, `group_by`, `sort_by`, `where`, `where_includes*`, `includes_any/all`, `default_list`, `compact`, `uniq`, `slugify`, and `title_case` handle ordering or aggregation without reserved tag objects.
 - Defaults are intentionally minimal; stacks are expected to be self-contained, with `-d` allowing an alternate defaults path.
 - Tags are plain user data: no normalization or class-level injection; objects own their `tags` (or any other fields) directly.
-- Templates use a stable context (`obj`, `global`, `stack`, resolved `classes`); `{{#file}}` emits files from the current context without side effects.
+- Templates use a stable context (`obj`, `global`, `stack`, resolved classes via `classesById`); `{{#file}}` emits files from the current context without side effects.
 - Demo coverage includes `stacks/recipes` (HTML site with tag and difficulty pages that mirror template/output paths).
 
 ## Near-Term Focus

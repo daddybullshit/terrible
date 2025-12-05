@@ -11,12 +11,12 @@ function createServices(canonical) {
 
   // Wrap helpers to bind the snapshot without exposing mutation.
   const boundHelpers = {
-    classLineage: (classId) => helpers.classLineage(snapshot.classes, classId),
-    classInheritsFrom: (childId, ancestorId) => helpers.classInheritsFrom(snapshot.classes, childId, ancestorId),
+    classLineage: (classId) => helpers.classLineage(snapshot.classesById, classId),
+    classInheritsFrom: (childId, ancestorId) => helpers.classInheritsFrom(snapshot.classesById, childId, ancestorId),
     filterInstancesByClass: (classId) => helpers.filterInstancesByClass(snapshot, classId),
-    filterEntriesByInheritance: (entries, classId) => helpers.filterEntriesByInheritance(entries, classId, snapshot.classes),
-    mergedSchemaFor: (classId) => helpers.mergedSchemaFor(snapshot.classes, classId),
-    requiredProps: (classId) => helpers.requiredProps(snapshot.classes, classId)
+    filterEntriesByInheritance: (entries, classId) => helpers.filterEntriesByInheritance(entries, classId, snapshot.classesById),
+    mergedSchemaFor: (classId) => helpers.mergedSchemaFor(snapshot.classesById, classId),
+    requiredProps: (classId) => helpers.requiredProps(snapshot.classesById, classId)
   };
 
   // Build a stable hook context with optional mutator. Mutator should only be used

@@ -332,6 +332,41 @@ function testArrayResetMerge() {
   );
 }
 
+function testClassResetUnwrapping() {
+  const fixtureRoot = path.join(__dirname, 'fixtures', 'class-reset');
+  const expectedPath = path.join(fixtureRoot, 'expected.json');
+  const expectedData = JSON.parse(fs.readFileSync(expectedPath, 'utf8'));
+  const expected = expectedData.expected;
+  const buildRoot = tempDir('terrible-class-reset-');
+  const buildName = 'class-reset';
+
+  runClassesBuild({
+    classDirs: [fixtureRoot],
+    buildRoot,
+    buildName,
+    includeHash: false,
+    quiet: true,
+    silent: true
+  });
+
+  const canonical = readCanonical(buildRoot, buildName);
+
+  // Test base class (no $reset, should just have its tags)
+  const baseClass = canonical.classesById.base;
+  assert.ok(baseClass, 'base class should exist');
+  assert.deepStrictEqual(baseClass.tags, expected.classes.base.tags, 'base class tags should be preserved');
+
+  // Test child class ($reset during inheritance merge)
+  const childClass = canonical.classesById.child;
+  assert.ok(childClass, 'child class should exist');
+  assert.deepStrictEqual(childClass.tags, expected.classes.child.tags, '$reset should replace inherited array');
+
+  // Test standalone class ($reset as first-occurrence - the bug case)
+  const standaloneClass = canonical.classesById.standalone;
+  assert.ok(standaloneClass, 'standalone class should exist');
+  assert.deepStrictEqual(standaloneClass.items, expected.classes.standalone.items, '$reset should unwrap for first-occurrence class (no merge)');
+}
+
 function testWarnExtraFieldsFlag() {
   const validationStack = path.join(__dirname, '..', 'stacks', 'validation-suite');
   const buildRoot = tempDir('terrible-extra-test-');
@@ -416,6 +451,8 @@ function run() {
   testGoldenInstancesBuild();
   console.log('Running regression: $reset array merge...');
   testArrayResetMerge();
+  console.log('Running regression: class $reset unwrapping...');
+  testClassResetUnwrapping();
   console.log('Running regression: --warn-extra-fields flag...');
   testWarnExtraFieldsFlag();
   console.log('Running regression: --warnings-as-errors flag...');

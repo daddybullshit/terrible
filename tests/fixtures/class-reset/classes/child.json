@@ -1,0 +1,9 @@
+{
+  "class": "child",
+  "parent": "base",
+  "description": "Child class that resets tags",
+  "tags": {
+    "$reset": true,
+    "value": ["child-only"]
+  }
+}
