@@ -50,6 +50,7 @@ Terrible keeps those variant-heavy configs and docs from drifting. Describe reus
 - Build pipeline and CLI usage: `docs/build-and-cli.md`
 - Templates, helpers, and output rules: `docs/template-syntax.md`
 - Validation and schemas: `docs/validation.md`
+- Architecture and internal APIs: `docs/architecture.md`
 - Changelog: `CHANGELOG.md`
 - Roadmap: `docs/roadmap.md`
 
