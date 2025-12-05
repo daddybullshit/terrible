@@ -23,10 +23,32 @@ Terrible turns JSON-defined stacks into real outputs. Provide classes, instances
 - Roadmap: `docs/roadmap.md`
 
 ## Repository layout
-- `js/core/`: shared helpers (canonical/data/utils, merge/object/fs helpers, services, structured errors).
-- `js/templates/`: template resolution/helpers, templating interfaces, Handlebars engine.
-- `js/`: build pipeline, loaders, CLI wiring.
+- `js/core/`: shared utilities organized by responsibility:
+  - `errors.js` — structured error types with codes and context
+  - `format.js` — terminal color/formatting utilities
+  - `merge_utils.js` — deep merge with `$reset` array semantics
+  - `object_utils.js` — array/object helpers (`asArray`, `mapLikeToObject`)
+  - `data_utils.js` — path access and list operations
+  - `fs_utils.js` — file I/O with structured errors
+  - `build_helpers.js` — build constants, output writers, reserved keys
+  - `canonical_helpers.js` — class lineage and schema helpers
+  - `canonical_api.js` — read-only view and mutator for canonical data
+  - `services.js` — service provider for hooks/templates
+- `js/templates/`: template engine layer:
+  - `handlebars_engine.js` — Handlebars wrapper with template discovery
+  - `template_helpers.js` — built-in Handlebars helpers
+  - `template_resolution.js` — placeholder/inheritance resolution
+  - `template_utils.js` — template loading and rendering
+- `js/`: build pipeline and CLI:
+  - `terrible.js` — CLI entry point (yargs-based)
+  - `build.js` — build orchestration and commands
+  - `class_loader.js` — class/schema loading and inheritance resolution
+  - `stack_loader.js` — instance loading and merging
+  - `stack_paths.js` — path resolution and hashing
+  - `validation.js` — Ajv-based schema validation
+  - `logger.js` — logging with warning/error tracking
+  - `issue_collector.js` — issue collection for validation
 - `stacks/`: stack-specific classes/instances/templates.
-- `tests/`: unit tests (`core.test.js`) and regression tests (`regression.test.js`).
+- `tests/`: unit tests (`core.test.js`, 73 tests) and regression tests (`regression.test.js`, 11 tests).
 - `docs/`: end-user documentation.
 - `build/`: generated outputs (safe to regenerate).
