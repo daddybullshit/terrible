@@ -7,7 +7,8 @@ const { runBuild, runClassesBuild, runInstancesBuild, runValidate } = require('.
 const { loadStack } = require('../js/stack_loader');
 const { createLogger } = require('../js/logger');
 const { createIssueCollector } = require('../js/issue_collector');
-const { resolveStackDir } = require('../js/stack_paths');
+const { resolveStackDir, validateDirs } = require('../js/stack_paths');
+const { PathError } = require('../js/core/errors');
 
 function tempDir(prefix) {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -121,6 +122,25 @@ function testStackPathsResolveWithCwdPriorityAndRepoFallback() {
     fs.rmSync(path.resolve(temp, '../stacks'), { recursive: true, force: true });
     process.chdir(originalCwd);
   }
+}
+
+function testPathErrorContext() {
+  // Non-existent path should throw PathError with resolution attempts
+  try {
+    resolveStackDir('/nonexistent/terrible/test/path/xyz');
+    assert.fail('should throw for non-existent path');
+  } catch (err) {
+    assert.ok(err instanceof PathError, 'should throw PathError');
+    assert.ok(err.context.attempts.length > 0, 'should include attempts in context');
+    assert.ok(err.context.cwd, 'should include cwd in context');
+    assert.ok(err.context.input === '/nonexistent/terrible/test/path/xyz', 'should include input in context');
+  }
+
+  // validateDirs should collect multiple errors
+  const { valid, errors } = validateDirs(['/bad/path/1', '/bad/path/2']);
+  assert.strictEqual(valid.length, 0, 'no valid paths');
+  assert.strictEqual(errors.length, 2, 'should collect both errors');
+  assert.ok(errors.every(e => e instanceof PathError), 'all errors should be PathError');
 }
 
 function testClassesOnlyBuild() {
@@ -291,6 +311,8 @@ function run() {
   testEmptyInstancesRootFails();
   console.log('Running regression: stack paths resolve from cwd first, with repo fallback...');
   testStackPathsResolveWithCwdPriorityAndRepoFallback();
+  console.log('Running regression: path error context...');
+  testPathErrorContext();
   console.log('Running regression: classes-only build...');
   testClassesOnlyBuild();
   console.log('Running regression: instances-only build...');
