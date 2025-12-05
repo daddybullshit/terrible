@@ -368,6 +368,93 @@ test('findJsonFiles finds JSON files', () => {
   assertEqual(result.length, 2);
 });
 
+// ============================================================
+// issue_collector tests
+// ============================================================
+console.log('\n📦 issue_collector');
+const { createIssueCollector } = require('../js/issue_collector');
+
+test('issue collector starts empty', () => {
+  const collector = createIssueCollector({});
+  assertEqual(collector.list(), []);
+  assertFalse(collector.hasErrors());
+  assertEqual(collector.count(), 0);
+});
+
+test('issue collector records warnings', () => {
+  const logs = [];
+  const collector = createIssueCollector({ log: { warn: m => logs.push(m), error: m => logs.push(m) } });
+  collector.warn('test warning', { code: 'TEST' });
+  assertEqual(collector.warnCount(), 1);
+  assertEqual(collector.errorCount(), 0);
+  assertFalse(collector.hasErrors());
+});
+
+test('issue collector records errors', () => {
+  const logs = [];
+  const collector = createIssueCollector({ log: { warn: m => logs.push(m), error: m => logs.push(m) } });
+  collector.error('test error', { code: 'TEST' });
+  assertEqual(collector.errorCount(), 1);
+  assertTrue(collector.hasErrors());
+});
+
+test('issue collector handles TerribleError', () => {
+  const logs = [];
+  const collector = createIssueCollector({ log: { warn: m => logs.push(m), error: m => logs.push(m) } });
+  const err = new PathError('path not found', { input: '/test', attempts: ['/a', '/b'] });
+  collector.add('error', err);
+  const issues = collector.list();
+  assertEqual(issues.length, 1);
+  assertEqual(issues[0].code, 'PATH_ERROR');
+  assertEqual(issues[0].input, '/test');
+});
+
+test('issue collector addAll adds multiple errors', () => {
+  const logs = [];
+  const collector = createIssueCollector({ log: { warn: m => logs.push(m), error: m => logs.push(m) } });
+  const errors = [
+    new PathError('error 1', { input: '/a' }),
+    new PathError('error 2', { input: '/b' })
+  ];
+  collector.addAll('error', errors);
+  assertEqual(collector.errorCount(), 2);
+});
+
+// ============================================================
+// stack_paths tests
+// ============================================================
+console.log('\n📦 stack_paths');
+const { validateDirs, resolveStackDir } = require('../js/stack_paths');
+
+test('validateDirs returns valid dirs', () => {
+  const { valid, errors } = validateDirs([tmpDir]);
+  assertEqual(errors.length, 0);
+  assertEqual(valid.length, 1);
+});
+
+test('validateDirs collects errors for invalid paths', () => {
+  const { valid, errors } = validateDirs(['/nonexistent/path/abc123']);
+  assertEqual(valid.length, 0);
+  assertEqual(errors.length, 1);
+  assertTrue(errors[0] instanceof PathError);
+});
+
+test('validateDirs handles mixed valid/invalid', () => {
+  const { valid, errors } = validateDirs([tmpDir, '/nonexistent/xyz']);
+  assertEqual(valid.length, 1);
+  assertEqual(errors.length, 1);
+});
+
+test('resolveStackDir throws PathError for missing dir', () => {
+  try {
+    resolveStackDir('/does/not/exist/anywhere');
+    throw new Error('Should have thrown');
+  } catch (e) {
+    assertTrue(e instanceof PathError);
+    assertTrue(e.context.attempts.length > 0);
+  }
+});
+
 test('scanDir returns empty for non-existent dir', () => {
   assertEqual(scanDir('/non/existent'), []);
 });

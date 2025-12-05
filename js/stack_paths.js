@@ -4,6 +4,7 @@ const path = require('path');
 const yargs = require('yargs/yargs');
 const { hideBin } = require('yargs/helpers');
 const { normalizeDirPath } = require('./core/fs_utils');
+const { PathError } = require('./core/errors');
 
 const repoRoot = path.join(__dirname, '..');
 
@@ -31,20 +32,23 @@ function normalizeStackDir(stackDirInput) {
     }
     candidates.push(path.resolve(repoRoot, '..', stackDirInput));
   }
-  const attempts = new Set();
+  const attempts = [];
   for (const candidate of candidates) {
-    attempts.add(candidate);
-    if (!fs.existsSync(candidate)) {
-      continue;
-    }
+    if (attempts.some(a => a.path === candidate)) continue;
+    const exists = fs.existsSync(candidate);
+    attempts.push({ path: candidate, exists });
+    if (!exists) continue;
     try {
       return normalizeDirPath(candidate);
     } catch (err) {
       // If this candidate fails, continue to the next; fall through to combined error below.
     }
   }
-  const attemptedList = Array.from(attempts).join(', ');
-  throw new Error(`Directory does not exist: ${stackDirInput} (tried ${attemptedList})`);
+  const tried = attempts.map(a => `${a.path} (${a.exists ? 'exists but not a directory' : 'not found'})`).join('\n  ');
+  throw new PathError(
+    `Directory not found: ${stackDirInput}`,
+    { input: stackDirInput, cwd: process.cwd(), attempts: attempts.map(a => a.path), tried }
+  );
 }
 
 // Hash a stack path (or identifier string) to produce a short, deterministic build dir suffix.
@@ -155,6 +159,27 @@ if (require.main === module) {
   }
 }
 
+/**
+ * Validate multiple directory paths, collecting all errors before failing.
+ * Returns { valid: string[], errors: PathError[] }.
+ */
+function validateDirs(inputs, label = 'directory') {
+  const valid = [];
+  const errors = [];
+  for (const input of toArray(inputs)) {
+    try {
+      valid.push(normalizeStackDir(input));
+    } catch (err) {
+      if (err instanceof PathError) {
+        errors.push(err);
+      } else {
+        errors.push(new PathError(`Invalid ${label}: ${input}`, { input, cause: err.message }));
+      }
+    }
+  }
+  return { valid, errors };
+}
+
 module.exports = {
   getStackHash,
   getBuildDirName,
@@ -165,5 +190,6 @@ module.exports = {
   buildDirNameFromDirs,
   resolveStackDirs,
   resolveDirs,
-  resolveBuildPaths
+  resolveBuildPaths,
+  validateDirs
 };

@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { stackHashFromDirs, resolveStackDirs, resolveDirs, resolveBuildPaths } = require('./stack_paths');
+const { stackHashFromDirs, resolveStackDirs, resolveDirs, resolveBuildPaths, validateDirs } = require('./stack_paths');
 const { createLogger } = require('./logger');
 const { loadStack, loadInstancesOnly } = require('./stack_loader');
 const { mapLikeToObject } = require('./core/object_utils');
@@ -23,18 +23,26 @@ function initBuildEnv(quiet) {
   return createLogger({ quiet });
 }
 
+/**
+ * Validate and resolve source directories with early error collection.
+ * Logs all path errors before failing, showing resolution attempts.
+ */
 function resolveSourceDirs(inputs, label, log) {
-  try {
-    const dirs = resolveStackDirs(inputs);
-    if (!dirs.length) {
-      throw new Error(`At least one ${label} source is required.`);
+  const { valid, errors } = validateDirs(inputs, label);
+  if (errors.length) {
+    for (const err of errors) {
+      const details = err.context.tried ? `\n  Tried:\n  ${err.context.tried}` : '';
+      log.error(`${err.message}${details}`);
     }
-    return dirs;
-  } catch (e) {
-    log.error(e.message);
     log.summarizeAndExitIfNeeded();
     return null;
   }
+  if (!valid.length) {
+    log.error(`At least one ${label} source is required.`);
+    log.summarizeAndExitIfNeeded();
+    return null;
+  }
+  return valid;
 }
 
 function prepareBuildDir(buildDir, buildRoot, log) {
