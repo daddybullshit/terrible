@@ -21,7 +21,7 @@ Templates are standard Handlebars files with a `resolve` helper that understands
 ## Helper reference (built-ins)
 - Resolution and logic: `resolve`, `eq`, `and`, `or`, `default`, `concat`, `identity`, `length`.
 - Collections: `values`, `group_by`, `sort_by`, `where`, `where_includes`, `where_includes_any`, `where_includes_all`, `includes_any`, `includes_all`, `default_list`, `compact`, `uniq`, `array`, `reverse`.
-- Inheritance-aware: `inherits`, `filter_inherits`, `beta_inherits_any`, `beta_inherits_all`, `beta_filter_inherits`.
+- Inheritance-aware: `inherits`, `inherits_any`, `inherits_all`, `filter_inherits`.
 - Schema-aware: `schema_required`, `schema_has`, `schema_props`, `schema_prop_source`, `class_lineage`, `schema_required_by_source`.
 - String utilities: `slugify`, `title_case`, `json`.
 - Partials and files: `partial_exists`, `file`.

@@ -3,7 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { runBuild } = require('../js/build');
+const { runBuild, runClassesBuild, runInstancesBuild, runValidate } = require('../js/build');
 const { loadStack } = require('../js/stack_loader');
 const { createLogger } = require('../js/logger');
 const { createIssueCollector } = require('../js/issue_collector');
@@ -23,7 +23,8 @@ function runBuildWithStacks(stackDirs, opts = {}) {
   const buildRoot = opts.buildRoot || tempDir('terrible-test-');
   const buildName = opts.buildName || 'test-build';
   runBuild({
-    stackDirs,
+    classDirs: stackDirs,
+    instanceDirs: stackDirs,
     buildRoot,
     buildName,
     includeHash: false,
@@ -49,8 +50,10 @@ function testInstancesIncludeGlobalAndOrdering() {
   assert.strictEqual(canonical.instancesById.global.stack, 'b', 'global merge should include later stack values');
   assert.strictEqual(canonical.instancesById.global.note, 'second');
 
-  assert.strictEqual(canonical.buildMeta.stackOrder[0], stackA, 'stack order preserved from CLI input');
-  assert.strictEqual(canonical.buildMeta.stackOrder[1], stackB, 'stack order preserved from CLI input');
+  assert.strictEqual(canonical.buildMeta.classOrder[0], stackA, 'class order preserved from CLI input');
+  assert.strictEqual(canonical.buildMeta.classOrder[1], stackB, 'class order preserved from CLI input');
+  assert.strictEqual(canonical.buildMeta.instanceOrder[0], stackA, 'instance order preserved from CLI input');
+  assert.strictEqual(canonical.buildMeta.instanceOrder[1], stackB, 'instance order preserved from CLI input');
 }
 
 function testEmptyInstancesRootFails() {
@@ -102,6 +105,105 @@ function testStackPathsResolveWithCwdPriorityAndRepoFallback() {
   }
 }
 
+function testClassesOnlyBuild() {
+  const fixtureRoot = path.join(__dirname, 'fixtures', 'ordered');
+  const stackA = path.join(fixtureRoot, 'a');
+  const buildRoot = tempDir('terrible-classes-test-');
+  const buildName = 'classes-only';
+
+  runClassesBuild({
+    classDirs: [stackA],
+    buildRoot,
+    buildName,
+    includeHash: false,
+    quiet: true
+  });
+
+  const canonical = readCanonical(buildRoot, buildName);
+
+  // Should have classes but no instances
+  assert.ok(canonical.classes, 'canonical should have classes property');
+  assert.strictEqual(canonical.instances, undefined, 'classes-only build should not have instances');
+  assert.strictEqual(canonical.buildMeta.mode, 'classes-only', 'build mode should be classes-only');
+
+  // Should write class definitions and schemas
+  const classDefsDir = path.join(buildRoot, buildName, 'meta', 'class-definitions');
+  const classSchemasDir = path.join(buildRoot, buildName, 'meta', 'class-schemas');
+  assert.ok(fs.existsSync(classDefsDir), 'class definitions directory should exist');
+  assert.ok(fs.existsSync(classSchemasDir), 'class schemas directory should exist');
+}
+
+function testValidateOnlyCommand() {
+  const recipesStack = path.join(__dirname, '..', 'stacks', 'recipes');
+
+  // Capture console output to verify validation runs
+  let errorCount = 0;
+  const originalError = console.error;
+  console.error = (msg) => {
+    if (msg && msg.includes && msg.includes('error')) {
+      errorCount++;
+    }
+  };
+
+  try {
+    runValidate({
+      classDirs: [recipesStack],
+      instanceDirs: [recipesStack],
+      warningsAsErrors: false,
+      warnExtraFields: false,
+      quiet: true
+    });
+  } finally {
+    console.error = originalError;
+  }
+
+  // recipes stack should validate without errors
+  assert.strictEqual(errorCount, 0, 'recipes stack should validate without errors');
+}
+
+function testMixedSourceValidation() {
+  const fixtureRoot = path.join(__dirname, 'fixtures', 'ordered');
+  const stackA = path.join(fixtureRoot, 'a');
+  const stackB = path.join(fixtureRoot, 'b');
+
+  // Should be able to validate with classes from A and instances from B
+  runValidate({
+    classDirs: [stackA],
+    instanceDirs: [stackB],
+    warningsAsErrors: false,
+    warnExtraFields: false,
+    quiet: true
+  });
+  // If we get here without throwing, mixed-source validation works
+}
+
+function testInstancesOnlyBuild() {
+  const fixtureRoot = path.join(__dirname, 'fixtures', 'ordered');
+  const stackA = path.join(fixtureRoot, 'a');
+  const buildRoot = tempDir('terrible-instances-test-');
+  const buildName = 'instances-only';
+
+  runInstancesBuild({
+    instanceDirs: [stackA],
+    buildRoot,
+    buildName,
+    includeHash: false,
+    quiet: true
+  });
+
+  const canonical = readCanonical(buildRoot, buildName);
+
+  // Should have instances but NOT classes (instances-only = no class resolution)
+  assert.strictEqual(canonical.classes, undefined, 'instances-only build should NOT have classes');
+  assert.ok(canonical.instances, 'instances-only build should have instances');
+  assert.ok(canonical.instancesById, 'instances-only build should have instancesById');
+  assert.strictEqual(canonical.buildMeta.mode, 'instances-only', 'build mode should be instances-only');
+
+  // Should NOT write validation report (no validation in instances-only)
+  const validationPath = path.join(buildRoot, buildName, 'meta', 'validation.json');
+  assert.ok(!fs.existsSync(validationPath), 'instances-only should NOT have validation report');
+}
+
 function run() {
   console.log('Running regression: instances include global + ordering...');
   testInstancesIncludeGlobalAndOrdering();
@@ -109,6 +211,14 @@ function run() {
   testEmptyInstancesRootFails();
   console.log('Running regression: stack paths resolve from cwd first, with repo fallback...');
   testStackPathsResolveWithCwdPriorityAndRepoFallback();
+  console.log('Running regression: classes-only build...');
+  testClassesOnlyBuild();
+  console.log('Running regression: instances-only build...');
+  testInstancesOnlyBuild();
+  console.log('Running regression: validate-only command...');
+  testValidateOnlyCommand();
+  console.log('Running regression: mixed-source validation...');
+  testMixedSourceValidation();
   console.log('All regression tests passed.');
 }
 

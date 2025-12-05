@@ -253,4 +253,65 @@ function loadStack({ stackDirs, classDirs, instanceDirs, log, issues }) {
   };
 }
 
-module.exports = { loadStack };
+// Load and merge instances only (no class resolution, no validation).
+// Returns raw merged instance data without class defaults applied.
+function loadInstancesOnly({ instanceDirs, log }) {
+  const roots = Array.isArray(instanceDirs) ? instanceDirs : [instanceDirs];
+  if (!roots.length) {
+    throw new Error('At least one instances root is required.');
+  }
+
+  ensureDirectoriesExist(roots, 'Instances');
+
+  const inspections = inspectInstanceRoots(roots);
+  const emptyRoots = inspections.filter(entry => !entry.hasGlobal && !entry.hasInstances).map(entry => entry.root);
+  if (emptyRoots.length) {
+    throw new Error(`No instance or global files found in ${emptyRoots.join(', ')}`);
+  }
+
+  const merged = new Map();
+  let mergedGlobals = { id: 'global', build: [] };
+
+  inspections.forEach(entry => {
+    const { globalPath, instancesDir, hasGlobal } = entry;
+    const files = loadStackFiles(instancesDir, { required: false, log });
+
+    if (hasGlobal) {
+      try {
+        const data = readJsonFile(globalPath);
+        mergedGlobals = deepMerge(mergedGlobals, data);
+      } catch (err) {
+        log.error(`Failed to parse ${globalPath}: ${err.message}`);
+      }
+    }
+
+    files.forEach(obj => {
+      if (obj.id === 'global') {
+        mergedGlobals = deepMerge(mergedGlobals, obj);
+        return;
+      }
+      if (merged.has(obj.id)) {
+        const mergedObj = deepMerge(merged.get(obj.id), obj);
+        mergedObj.id = obj.id;
+        merged.set(obj.id, mergedObj);
+      } else {
+        merged.set(obj.id, obj);
+      }
+    });
+  });
+
+  merged.set('global', mergedGlobals);
+
+  const stackObjects = Array.from(merged.values());
+  const instancesById = new Map(merged);
+
+  return {
+    stackObjects: ['global', ...Array.from(instancesById.keys()).filter(k => k !== 'global')]
+      .map(key => instancesById.get(key))
+      .filter(Boolean),
+    instancesById,
+    global: mergedGlobals
+  };
+}
+
+module.exports = { loadStack, loadInstancesOnly };
